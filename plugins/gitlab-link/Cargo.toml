@@ -18,7 +18,7 @@ homepage = "https://github.com/jag-k/clipboard-transformer"
 crate-type = ["cdylib"]
 
 [dependencies]
-base64 = "0.21"
+base64 = "0.22"
 base64-serde = "0.7"
 extism-pdk = "1.4"
 serde = { version = "1.0", features = ["derive"] }

@@ -136,7 +136,7 @@ dependencies = [
 name = "gitlab-link"
 version = "0.1.0"
 dependencies = [
- "base64 0.21.7",
+ "base64 0.22.1",
  "base64-serde",
  "extism-pdk",
  "schemars",
