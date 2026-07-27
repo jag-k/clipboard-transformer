@@ -1,0 +1,7 @@
+# actionlint's built-in runner-label list lags behind GitHub's hosted images.
+# `macos-15-intel` is a real GitHub-hosted x86_64 runner and is the only way to
+# build the Intel release artifacts, so declare it here instead of silencing
+# the runner-label rule.
+self-hosted-runner:
+  labels:
+    - macos-15-intel

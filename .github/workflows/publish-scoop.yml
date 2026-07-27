@@ -1,0 +1,75 @@
+name: Publish Scoop
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+      tag:
+        required: true
+        type: string
+
+jobs:
+  publish-scoop:
+    runs-on: ubuntu-22.04
+    env:
+      VERSION: ${{ inputs.version }}
+      TAG: ${{ inputs.tag }}
+      SCOOP_BUCKET_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+    steps:
+      - name: Check publishing token
+        run: |
+          if [[ -z "${SCOOP_BUCKET_TOKEN}" ]]; then
+            echo "Scoop publication requires SCOOP_BUCKET_TOKEN" >&2
+            exit 1
+          fi
+
+      - name: Checkout source
+        uses: actions/checkout@v6
+        with:
+          path: source
+          persist-credentials: false
+
+      - name: Checkout Scoop bucket
+        uses: actions/checkout@v6
+        with:
+          repository: jag-k/scoop-bucket
+          token: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+          path: bucket
+          persist-credentials: true
+
+      - name: Fetch portable zip digest
+        id: portable
+        uses: ./source/.github/actions/fetch-release-sha256
+        with:
+          url: https://github.com/jag-k/clipboard-transformer/releases/download/${{ inputs.tag }}/clipboard-transformer-${{ inputs.version }}-x86_64-windows-portable.zip.sha256
+
+      - name: Update manifest
+        env:
+          SHA256: ${{ steps.portable.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+
+          name="clipboard-transformer-${VERSION}-x86_64-windows-portable.zip"
+          release_url="https://github.com/jag-k/clipboard-transformer/releases/download/${TAG}"
+
+          mkdir -p bucket/bucket
+          jq \
+            --arg version "${VERSION}" \
+            --arg url "${release_url}/${name}" \
+            --arg sha256 "${SHA256}" \
+            '.version = $version
+             | .architecture."64bit".url = $url
+             | .architecture."64bit".hash = $sha256' \
+            source/package/scoop/clipboard-transformer.json \
+            > bucket/bucket/clipboard-transformer.json
+
+          jq --exit-status . bucket/bucket/clipboard-transformer.json >/dev/null
+
+      - name: Commit manifest
+        uses: ./source/.github/actions/commit-manifest
+        with:
+          directory: bucket
+          file: bucket/clipboard-transformer.json
+          message: clipboard-transformer ${{ inputs.version }}

@@ -1,0 +1,142 @@
+name: Build Linux packages
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version matching Cargo.toml
+        required: true
+        type: string
+
+permissions:
+  attestations: write
+  contents: read
+  id-token: write
+
+jobs:
+  build-linux-packages:
+    runs-on: ubuntu-22.04
+    env:
+      APPIMAGE_EXTRACT_AND_RUN: "1"
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Install Rust
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      - name: Install AppImage packaging tools
+        run: >-
+          sudo apt-get update &&
+          sudo apt-get install --yes
+          desktop-file-utils patchelf squashfs-tools
+
+      - name: Install just
+        uses: ./.github/actions/install-just
+
+      - name: Install cargo-packager
+        uses: ./.github/actions/install-cargo-packager
+
+      - name: Cache cargo-generate-rpm
+        uses: actions/cache@v5
+        with:
+          path: ~/.cargo/bin/cargo-generate-rpm
+          key: cargo-generate-rpm-0.21.0-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Install cargo-generate-rpm
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! cargo generate-rpm --version >/dev/null 2>&1; then
+            cargo install cargo-generate-rpm --locked --version 0.21.0
+          fi
+
+      - name: Check release version
+        uses: ./.github/actions/check-version
+        with:
+          version: ${{ inputs.version }}
+
+      # `just package-linux` owns the build flags, the single cargo-packager
+      # invocation for all three of its formats, the PKGBUILD optdepends patch,
+      # and the RPM. Keeping the commands here would let the packaged build
+      # drift from the local one.
+      - name: Build native packages
+        shell: bash
+        run: just package-linux
+
+      - name: Check Pacman runtime dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          dependencies="$(
+            awk '
+              /^depends=\(/ { capture = 1 }
+              capture { print }
+              capture && /\)$/ { exit }
+            ' target/packager/PKGBUILD | tr '()\n' '   '
+          )"
+          [[ " ${dependencies} " == *" glibc "* ]]
+          [[ " ${dependencies} " == *" xdg-desktop-portal "* ]]
+          if [[ " ${dependencies} " == *" wayland "* \
+            || " ${dependencies} " == *" xdg-utils "* ]]; then
+            echo "Wayland and xdg-utils must remain optional runtime integrations" >&2
+            exit 1
+          fi
+          grep -Fq "'wayland: native Wayland clipboard support'" target/packager/PKGBUILD
+          grep -Fq "'xdg-utils: fallback for opening support links'" target/packager/PKGBUILD
+
+      - name: Stage release artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          arch="$(uname -m)"
+          case "${arch}" in
+            x86_64) release_arch=x86_64 ;;
+            aarch64) release_arch=aarch64 ;;
+            *) echo "Unsupported release architecture: ${arch}" >&2; exit 1 ;;
+          esac
+          mkdir -p target/distrib target/linux-cli
+          cp target/release/clipboard-transformer LICENSE target/linux-cli/
+          tar -C target/linux-cli -cJf \
+            "target/distrib/clipboard-transformer-cli-${VERSION}-${release_arch}-linux.tar.xz" \
+            clipboard-transformer \
+            LICENSE
+
+          find target/packager target/generate-rpm -maxdepth 2 -type f \
+            \( -name '*.deb' -o -name '*.AppImage' -o -name '*.tar.gz' -o -name 'PKGBUILD' -o -name '*.rpm' \) \
+            -exec cp {} target/distrib/ \;
+
+          count="$(find target/distrib -maxdepth 1 -type f | wc -l)"
+          if [[ "${count}" -lt 6 ]]; then
+            echo "Expected CLI, DEB, AppImage, Pacman archive, PKGBUILD, and RPM; found ${count}" >&2
+            find target/distrib -maxdepth 1 -type f -print >&2
+            exit 1
+          fi
+          (
+            cd target/distrib
+            for artifact in *; do
+              sha256sum "${artifact}" > "${artifact}.sha256"
+            done
+          )
+
+      - name: Attest release artifacts
+        uses: actions/attest@v4
+        with:
+          subject-path: target/distrib/*
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: artifacts-linux-packages
+          path: target/distrib/*
+          if-no-files-found: error

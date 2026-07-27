@@ -1,0 +1,80 @@
+name: Publish Homebrew
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+      tag:
+        required: true
+        type: string
+
+jobs:
+  publish-homebrew:
+    runs-on: ubuntu-22.04
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+      VERSION: ${{ inputs.version }}
+    steps:
+      - name: Check publishing token
+        run: |
+          if [[ -z "${HOMEBREW_TAP_TOKEN}" ]]; then
+            echo "Homebrew publication requires HOMEBREW_TAP_TOKEN" >&2
+            exit 1
+          fi
+
+      - name: Checkout source
+        uses: actions/checkout@v6
+        with:
+          path: source
+          persist-credentials: false
+
+      - name: Checkout Homebrew tap
+        uses: actions/checkout@v6
+        with:
+          repository: jag-k/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+          persist-credentials: true
+
+      - name: Fetch arm zip digest
+        id: arm
+        uses: ./source/.github/actions/fetch-release-sha256
+        with:
+          url: https://github.com/jag-k/clipboard-transformer/releases/download/${{ inputs.tag }}/clipboard-transformer-${{ inputs.version }}-aarch64-apple-darwin-homebrew.zip.sha256
+
+      - name: Fetch intel zip digest
+        id: intel
+        uses: ./source/.github/actions/fetch-release-sha256
+        with:
+          url: https://github.com/jag-k/clipboard-transformer/releases/download/${{ inputs.tag }}/clipboard-transformer-${{ inputs.version }}-x86_64-apple-darwin-homebrew.zip.sha256
+
+      - name: Update cask
+        working-directory: source
+        env:
+          ARM_SHA256: ${{ steps.arm.outputs.sha256 }}
+          INTEL_SHA256: ${{ steps.intel.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p ../tap/Casks
+          cp package/homebrew/clipboard-transformer.rb ../tap/Casks/clipboard-transformer.rb
+
+          ruby -e '
+            path, version, arm_sha256, intel_sha256 = ARGV
+            cask = File.read(path)
+            cask.sub!(/^  version ".*"$/, %(  version "#{version}"))
+            cask.sub!(/^  sha256 arm:\s+".*",\n\s+intel: ".*"$/, %(  sha256 arm:   "#{arm_sha256}",\n         intel: "#{intel_sha256}"))
+            File.write(path, cask)
+          ' ../tap/Casks/clipboard-transformer.rb "${VERSION}" "${ARM_SHA256}" "${INTEL_SHA256}"
+
+          brew style --fix ../tap/Casks/clipboard-transformer.rb || true
+
+      - name: Commit cask
+        uses: ./source/.github/actions/commit-manifest
+        with:
+          directory: tap
+          file: Casks/clipboard-transformer.rb
+          message: clipboard-transformer ${{ inputs.version }}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Clipboard Transformer Rules"
+  short_description: "Create, inspect, and validate clipboard rules"
+  default_prompt: "Use $clipboard-transformer-rules to create or fix a Clipboard Transformer rule."

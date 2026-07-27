@@ -1,0 +1,16 @@
+[Icon Theme]
+Name=Clipboard Transformer AppImage hicolor
+Comment=Bundled fallback icon theme for Clipboard Transformer
+Directories=256x256/apps,scalable/status
+
+[256x256/apps]
+Size=256
+Context=Applications
+Type=Fixed
+
+[scalable/status]
+Size=16
+Context=Status
+Type=Scalable
+MinSize=8
+MaxSize=512

@@ -1,0 +1,53 @@
+{
+  "##": [
+    "Release workflow replaces version, architecture.64bit.url, and architecture.64bit.hash before publishing this manifest to jag-k/scoop-bucket.",
+    "The published bucket manifest always points to the latest stable release; autoupdate describes how the next concrete manifest revision is generated.",
+    "Scoop runs uninstall hooks during updates too; old_version is present in that path and prevents removal of the user's autostart preference."
+  ],
+  "version": "0.1.0",
+  "description": "Rule-based clipboard transformer with a tray app and command-line interface",
+  "license": "MPL-2.0",
+  "homepage": "https://github.com/jag-k/clipboard-transformer",
+  "architecture": {
+    "64bit": {
+      "url": "https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.0/clipboard-transformer-0.1.0-x86_64-windows-portable.zip",
+      "hash": "PORTABLE_ZIP_SHA256"
+    }
+  },
+  "bin": "clipboard-transformer.exe",
+  "shortcuts": [
+    [
+      "Clipboard Transformer.exe",
+      "Clipboard Transformer\\Clipboard Transformer"
+    ]
+  ],
+  "post_install": [
+    "$runKey = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run'",
+    "$appName = 'dev.jag-k.clipboard-transformer'",
+    "$command = (Get-ItemProperty -Path $runKey -ErrorAction SilentlyContinue).$appName",
+    "if ($null -ne $command) { Set-ItemProperty -Path $runKey -Name $appName -Value ('\"{0}\"' -f (Join-Path $dir 'Clipboard Transformer.exe')) }"
+  ],
+  "pre_uninstall": [
+    "Get-Process -Name 'Clipboard Transformer', 'clipboard-transformer' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue"
+  ],
+  "post_uninstall": [
+    "if ($null -eq $old_version) { Remove-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name 'dev.jag-k.clipboard-transformer' -ErrorAction SilentlyContinue; Remove-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run' -Name 'dev.jag-k.clipboard-transformer' -ErrorAction SilentlyContinue; Remove-Item -Path (Join-Path $env:APPDATA 'Microsoft\\Windows\\Start Menu\\Programs\\Clipboard Transformer') -Recurse -Force -ErrorAction SilentlyContinue }"
+  ],
+  "notes": [
+    "The clipboard-transformer CLI is available on PATH through Scoop's shim.",
+    "The Start Menu shortcut launches the Clipboard Transformer tray app.",
+    "Run on Startup is controlled from the tray menu, preserved across Scoop upgrades, and removed on uninstall.",
+    "Configuration, state, and cache are stored outside the Scoop installation and are preserved during upgrades and uninstall."
+  ],
+  "checkver": "github",
+  "autoupdate": {
+    "architecture": {
+      "64bit": {
+        "url": "https://github.com/jag-k/clipboard-transformer/releases/download/v$version/clipboard-transformer-$version-x86_64-windows-portable.zip",
+        "hash": {
+          "url": "$url.sha256"
+        }
+      }
+    }
+  }
+}

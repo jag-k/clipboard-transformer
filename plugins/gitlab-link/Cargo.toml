@@ -1,0 +1,42 @@
+# Example Clipboard Transformer plugin. Not a workspace member: build it
+# explicitly for wasm32 with `just build-example-plugin`.
+#
+# build.rs assembles the embedded manifest; src/rules.rs contains guest rule
+# behavior and src/settings.rs supplies the shared schema types.
+[package]
+name = "gitlab-link"
+version = "0.1.0"
+edition = "2021"
+publish = false
+# These fields flow into the embedded plugin manifest through build.rs.
+description = "Rewrites copied GitLab project, planning, CI/CD, and repository URLs into Markdown links. With a configured instance token and an http grant it fetches resource titles and project names."
+authors = ["jag-k"]
+license = "MPL-2.0"
+homepage = "https://github.com/jag-k/clipboard-transformer"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+base64 = "0.21"
+base64-serde = "0.7"
+extism-pdk = "1.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# The schemars derives in src/settings.rs are gated to non-wasm targets, so
+# the plugin binary itself never depends on schemars.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+schemars = "0.8"
+
+[build-dependencies]
+schemars = "0.8"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[profile.release]
+lto = true
+opt-level = "s"
+strip = true
+
+[workspace]

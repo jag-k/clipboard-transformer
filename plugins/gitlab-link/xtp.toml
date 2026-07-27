@@ -1,0 +1,8 @@
+app_id = ""
+bin = "target/wasm32-wasip1/release/gitlab_link.wasm"
+extension_point_id = ""
+name = "gitlab-link"
+
+[scripts]
+build = "cargo build --release --target wasm32-wasip1"
+format = "cargo fmt"

@@ -1,0 +1,72 @@
+# Rust build artifacts
+/target/
+/plugins/*/target/
+/plugins.local/
+
+# Cargo local configuration and generated package output
+.cargo/.package-cache
+*.crate
+
+# Logs and crash dumps
+*.log
+*.out
+*.err
+
+# Environment and local override files
+.env
+.env.*
+!.env.example
+*.local
+
+# macOS metadata and transient files
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.Spotlight-V100
+.Trashes
+
+# WiX intermediate output from building package/windows/extras.wxs
+*.wixobj
+*.wixpdb
+
+# macOS packaging, signing, and notarization leftovers
+*.app
+*.dmg
+*.pkg
+*.xcarchive
+*.p12
+*.p8
+*.cer
+*.mobileprovision
+*.provisionprofile
+*.entitlements.local
+
+# Editor and IDE state
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+*.swp
+*.swo
+*~
+
+# Tool caches
+.cache/
+.pytest_cache/
+.ruff_cache/
+.taplo/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Local files
+local.*
+*.local.*
+*.local

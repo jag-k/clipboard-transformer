@@ -1,0 +1,76 @@
+# cargo-deny configuration. Run with `just check-deny`; CI runs the same checks.
+#
+# Keep this file boring. If a check starts failing, the answer is normally to
+# update or drop the dependency, not to widen an allow list here.
+
+[graph]
+# Only targets the project actually ships. Without this, the license and
+# advisory sets include crates for platforms that are never built.
+targets = [
+  "aarch64-apple-darwin",
+  "x86_64-apple-darwin",
+  "x86_64-pc-windows-msvc",
+  "x86_64-unknown-linux-gnu",
+  "aarch64-unknown-linux-gnu",
+  "wasm32-unknown-unknown",
+  "wasm32-wasip1",
+]
+
+[advisories]
+version = 2
+yanked = "deny"
+# Every entry needs a reason and must be re-checked, not inherited forever.
+ignore = [
+  # Two quick-xml DoS advisories (quadratic attribute scan, unbounded namespace
+  # allocation) reached only through `wayland-scanner`, which is a proc-macro
+  # crate: it runs during compilation and is not linked into any shipped
+  # artifact. The XML it parses is the protocol definitions vendored in the
+  # wayland-protocols crates, not input from a user or a clipboard payload.
+  # Not fixable here either -- wayland-scanner 0.31.10 requires `quick-xml
+  # ^0.39`, so 0.41.0 is a semver-incompatible bump upstream has to make.
+  # Drop both entries once wayland-scanner ships a quick-xml >=0.41 release.
+  { id = "RUSTSEC-2026-0194", reason = "quick-xml in the wayland-scanner proc-macro, compile-time only, fixed version is semver-incompatible upstream" },
+  { id = "RUSTSEC-2026-0195", reason = "same quick-xml path as RUSTSEC-2026-0194" },
+]
+
+[licenses]
+version = 2
+# The application is MPL-2.0 and is distributed as signed binaries, so every
+# dependency must be usable under a permissive license. Several crates in the
+# tree are dual-licensed with a copyleft option (`ittapi` is
+# `GPL-2.0-only OR BSD-3-Clause`, `r-efi` offers `LGPL-2.1-or-later`); the
+# copyleft halves are deliberately absent below so the permissive alternative is
+# the one selected. Do not add a GPL or LGPL entry to make a build pass.
+allow = [
+  "0BSD",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "BSL-1.0",
+  "CC0-1.0",
+  "CDLA-Permissive-2.0",
+  "ISC",
+  "MIT",
+  "MPL-2.0",
+  "Unicode-3.0",
+  "Unlicense",
+  "Zlib",
+]
+confidence-threshold = 0.9
+
+[bans]
+# Duplicate versions are a warning, not an error: a 500-crate graph that pulls
+# in wasmtime and three platform binding stacks always has some, and failing on
+# them would mean pinning transitive dependencies the project does not own.
+multiple-versions = "warn"
+# The workspace crates depend on each other by path with no version requirement,
+# which reads as a wildcard. Only those are exempt; a wildcard on a published
+# crate is still an error.
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

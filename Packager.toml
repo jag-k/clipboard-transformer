@@ -1,0 +1,118 @@
+"$schema" = "https://raw.githubusercontent.com/crabnebula-dev/cargo-packager/main/crates/packager/schema.json"
+
+name = "clipboard-transformer"
+productName = "Clipboard Transformer"
+version = "0.1.0"
+identifier = "dev.jag-k.clipboard-transformer"
+description = "Rule-based clipboard transformer"
+homepage = "https://github.com/jag-k/clipboard-transformer"
+authors = ["jag-k"]
+publisher = "jag-k"
+copyright = "Copyright (c) 2026 jag-k"
+licenseFile = "LICENSE"
+category = "Utility"
+icons = [
+  "assets/generated/linux/app-icon.png",
+  "assets/generated/windows/app-icon.ico",
+  "assets/generated/macos/AppIcon.icns",
+]
+
+# Formats are always passed explicitly (`--formats ...`) by the Justfile
+# recipes and CI workflows, so no default is configured here.
+outDir = "target/packager"
+binariesDir = "target/release"
+
+[[binaries]]
+path = "Clipboard Transformer"
+main = true
+
+[[resources]]
+# Justfile stages only resources for the current platform here. This avoids
+# shipping macOS Assets.car in the Windows MSI while keeping one config file.
+src = "target/packager-resources"
+target = "."
+
+[[resources]]
+src = "LICENSE"
+target = "LICENSE"
+
+[macos]
+infoPlistPath = "package/macos/Info.plist"
+backgroundApp = true
+minimumSystemVersion = "13.0"
+# Required whenever signing happens: the hardened runtime kills Wasmtime
+# plugin execution without allow-unsigned-executable-memory
+# (.agents/runbooks/release/macos-signing.md). Harmless unsigned.
+entitlements = "package/macos/entitlements.plist"
+# Signing runs only when this identity is set, and cargo-packager accepts it
+# nowhere else. Set APPLE_SIGNING_IDENTITY instead of editing this line: the
+# packaging recipes then build a git-ignored Packager.local.toml carrying it.
+# The key itself comes from the login keychain locally or from
+# APPLE_CERTIFICATE / APPLE_CERTIFICATE_PASSWORD in CI. See
+# .agents/runbooks/release/macos-signing.md.
+# signingIdentity = "Developer ID Application: <Name> (<TEAMID>)"
+
+[windows]
+allowDowngrades = false
+
+[wix]
+# cargo-packager 0.11.8 passes fragmentPaths to WiX 3.11 as \\?\ verbatim paths,
+# which candle.exe cannot open. Keep the extra fragment inline so cargo-packager
+# writes it into its own intermediates directory with a normal path.
+fragments = ['''
+<?xml version="1.0" encoding="utf-8"?>
+<?if $(sys.BUILDARCH)="x86"?>
+    <?define Win64 = "no" ?>
+<?elseif $(sys.BUILDARCH)="x64"?>
+    <?define Win64 = "yes" ?>
+<?else?>
+    <?error Unsupported value of sys.BUILDARCH=$(sys.BUILDARCH)?>
+<?endif?>
+
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+    <Fragment>
+        <DirectoryRef Id="INSTALLDIR">
+            <Component
+                    Id="ToastActivationRegistration"
+                    Guid="3D5A306E-08A5-4BB9-B469-A90E9B612CA0"
+                    Win64="$(var.Win64)">
+                <RegistryValue
+                        Root="HKLM"
+                        Key="Software\Classes\CLSID\{B87B8C6D-2489-4A7D-9EFA-D02C54DD2390}\LocalServer32"
+                        Type="string"
+                        Value="&quot;[!Path]&quot; -ToastActivated"
+                        KeyPath="yes"/>
+                <RegistryValue
+                        Root="HKLM"
+                        Key="Software\Classes\AppUserModelId\dev.jag-k.clipboard-transformer"
+                        Name="DisplayName"
+                        Type="string"
+                        Value="Clipboard Transformer"/>
+                <RegistryValue
+                        Root="HKLM"
+                        Key="Software\Classes\AppUserModelId\dev.jag-k.clipboard-transformer"
+                        Name="CustomActivator"
+                        Type="string"
+                        Value="{B87B8C6D-2489-4A7D-9EFA-D02C54DD2390}"/>
+            </Component>
+
+            <Component
+                    Id="CliPath"
+                    Guid="49ABC537-F563-4E81-9856-B7F7186EB042"
+                    Win64="$(var.Win64)">
+                <Condition><![CDATA[&Environment = 3]]></Condition>
+                <CreateFolder/>
+                <Environment
+                        Id="CliPathEnvironment"
+                        Name="PATH"
+                        Action="set"
+                        Part="last"
+                        System="yes"
+                        Permanent="no"
+                        Value="[INSTALLDIR]bin"/>
+            </Component>
+        </DirectoryRef>
+    </Fragment>
+</Wix>
+''']
+componentRefs = ["ToastActivationRegistration", "CliPath"]

@@ -1,0 +1,95 @@
+name: Publish AUR
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+      tag:
+        required: true
+        type: string
+
+jobs:
+  publish-aur:
+    runs-on: ubuntu-22.04
+    container: archlinux:base-devel
+    env:
+      VERSION: ${{ inputs.version }}
+      TAG: ${{ inputs.tag }}
+    steps:
+      - name: Install publishing tools
+        run: pacman -Syu --noconfirm --needed git openssh curl
+
+      - name: Checkout source
+        uses: actions/checkout@v6
+        with:
+          path: source
+          persist-credentials: false
+
+      - name: Configure AUR SSH access
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${AUR_SSH_PRIVATE_KEY}" ]]; then
+            echo "AUR publication requires AUR_SSH_PRIVATE_KEY" >&2
+            exit 1
+          fi
+          install -d -m 0700 ~/.ssh
+          printf '%s\n' "${AUR_SSH_PRIVATE_KEY}" >~/.ssh/aur
+          chmod 0600 ~/.ssh/aur
+          ssh-keyscan -t ed25519,rsa aur.archlinux.org >~/.ssh/known_hosts
+          cat >~/.ssh/config <<'EOF'
+          Host aur.archlinux.org
+            IdentityFile ~/.ssh/aur
+            User aur
+          EOF
+          chmod 0600 ~/.ssh/config
+
+      - name: Render AUR package metadata
+        run: |
+          set -euo pipefail
+          source_archive="clipboard-transformer-${VERSION}.tar.gz"
+          binary_archive="clipboard-transformer-app_${VERSION}_x86_64.tar.gz"
+          curl --fail --location --retry 3 \
+            --output "${source_archive}" \
+            "https://github.com/jag-k/clipboard-transformer/releases/download/${TAG}/${source_archive}"
+          curl --fail --location --retry 3 \
+            --output "${binary_archive}" \
+            "https://github.com/jag-k/clipboard-transformer/releases/download/${TAG}/${binary_archive}"
+          source_sha256="$(sha256sum "${source_archive}" | cut -d' ' -f1)"
+          binary_sha256="$(sha256sum "${binary_archive}" | cut -d' ' -f1)"
+
+          install -d /tmp/aur-render
+          cp -a source/package/aur/. /tmp/aur-render/
+          useradd --create-home aur-builder
+          chown -R aur-builder:aur-builder /tmp/aur-render
+          runuser -u aur-builder -- \
+            /tmp/aur-render/update-package.sh \
+            /tmp/aur-render/clipboard-transformer "${VERSION}" "${source_sha256}"
+          runuser -u aur-builder -- \
+            /tmp/aur-render/update-package.sh \
+            /tmp/aur-render/clipboard-transformer-bin "${VERSION}" "${binary_sha256}"
+
+      - name: Publish AUR repositories
+        run: |
+          set -euo pipefail
+          for package_name in clipboard-transformer-bin clipboard-transformer; do
+            git -c init.defaultBranch=master clone \
+              "ssh://aur@aur.archlinux.org/${package_name}.git" "aur-${package_name}"
+            cp "/tmp/aur-render/${package_name}/PKGBUILD" \
+              "/tmp/aur-render/${package_name}/.SRCINFO" \
+              source/package/aur/LICENSE \
+              "aur-${package_name}/"
+            git -C "aur-${package_name}" config user.name "Jag_k"
+            git -C "aur-${package_name}" config user.email \
+              "30597878+jag-k@users.noreply.github.com"
+            git -C "aur-${package_name}" add PKGBUILD .SRCINFO LICENSE
+            if ! git -C "aur-${package_name}" diff --cached --quiet; then
+              git -C "aur-${package_name}" commit -m "${package_name} ${VERSION}"
+              git -C "aur-${package_name}" push origin master
+            else
+              echo "${package_name} is already current"
+            fi
+          done

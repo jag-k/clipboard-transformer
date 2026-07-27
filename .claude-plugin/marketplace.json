@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "clipboard-transformer",
+  "description": "Agent tooling for configuring Clipboard Transformer",
+  "owner": {
+    "name": "jag-k"
+  },
+  "plugins": [
+    {
+      "name": "clipboard-transformer-rules",
+      "description": "Create, validate, and test Clipboard Transformer rules",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./.agents/skills/clipboard-transformer-rules"
+      ],
+      "category": "development",
+      "tags": [
+        "clipboard",
+        "configuration",
+        "automation"
+      ]
+    }
+  ]
+}

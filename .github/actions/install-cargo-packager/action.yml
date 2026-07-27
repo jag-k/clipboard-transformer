@@ -1,0 +1,22 @@
+name: Install cargo-packager
+description: >-
+  Install a pinned cargo-packager into ~/.cargo/bin, restored from the actions
+  cache when available. Requires a Rust toolchain.
+inputs:
+  version:
+    description: cargo-packager version to install (the single pinned default)
+    required: false
+    default: "0.11.8"
+runs:
+  using: composite
+  steps:
+    - name: Cache cargo-packager
+      id: cache
+      uses: actions/cache@v5
+      with:
+        path: ~/.cargo/bin/cargo-packager*
+        key: cargo-packager-${{ inputs.version }}-${{ runner.os }}-${{ runner.arch }}
+    - name: Install cargo-packager
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: cargo install cargo-packager --locked --version "${{ inputs.version }}"

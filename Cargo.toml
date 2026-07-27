@@ -1,0 +1,47 @@
+[workspace]
+members = ["apps/*", "crates/*", "tools/*"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.91"
+license = "MPL-2.0"
+repository = "https://github.com/jag-k/clipboard-transformer"
+homepage = "https://github.com/jag-k/clipboard-transformer"
+keywords = ["clipboard", "automation", "productivity", "text-processing", "desktop"]
+
+[workspace.dependencies]
+anyhow = "1.0"
+base64 = "0.22"
+chrono = { version = "0.4.45", features = ["unstable-locales"] }
+clap = { version = "4.5", features = ["derive", "env"] }
+ct-runtime = { path = "crates/runtime", default-features = false }
+ct-clipboard = { path = "crates/clipboard", default-features = false }
+ct-config = { path = "crates/config" }
+ct-host-loop = { path = "crates/host-loop" }
+ct-i18n = { path = "crates/i18n" }
+ct-core = { path = "crates/core" }
+ct-notifications = { path = "crates/notifications", default-features = false }
+ct-plugin-api = { path = "crates/plugin-api" }
+ct-tray = { path = "crates/tray", default-features = false }
+encoding_rs = "0.8"
+log = "0.4"
+regex = "1.10"
+schemars = { version = "0.8", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_bytes = "0.11"
+serde_json = "1.0"
+serde_yaml = "0.9"
+tempfile = "3.10"
+toml = "0.8"
+url = "2.5"
+uuid = { version = "1.8", features = ["v4", "serde"] }
+
+[profile.dev]
+incremental = true
+
+[profile.release]
+# Release artifacts are signed after Cargo finishes building them, so strip
+# symbols here once for every packaging path instead of mutating signed files.
+strip = "symbols"

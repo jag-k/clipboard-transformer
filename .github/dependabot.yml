@@ -1,0 +1,50 @@
+version: 2
+
+updates:
+  # The Cargo workspace. `plugins/gitlab-link` is deliberately not a workspace
+  # member, so it needs its own entry below.
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # Patch and minor bumps of the wasmtime/Extism stack arrive together and
+      # are meaningless to review one crate at a time.
+      wasm-runtime:
+        patterns:
+          - extism
+          - extism-*
+          - wasmtime
+          - wasmtime-*
+          - wasi-*
+          - wiggle*
+        update-types:
+          - minor
+          - patch
+      # Native platform bindings, same reasoning.
+      platform-bindings:
+        patterns:
+          - objc2
+          - objc2-*
+          - windows-sys
+          - windows-*
+          - x11rb*
+          - wayland-*
+          - ksni
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: cargo
+    directory: /plugins/gitlab-link
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+
+  # Keeps the action pins in .github/workflows and .github/actions current.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5

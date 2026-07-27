@@ -1,0 +1,6 @@
+[env]
+# Workspace root, resolved relative to this file's parent directory. Build
+# scripts and tools that read repository assets use it instead of walking up a
+# hardcoded number of `..` segments from CARGO_MANIFEST_DIR, which silently
+# breaks whenever a package changes nesting depth.
+CT_WORKSPACE_ROOT = { value = ".", relative = true }
