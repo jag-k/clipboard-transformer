@@ -290,6 +290,25 @@ jobs:
           key: windows-msi
       - name: Build MSI
         run: just package-windows-msi
+      - name: Verify MSI install and uninstall
+        shell: pwsh
+        run: |
+          $msi = Get-ChildItem target/packager/*.msi | Select-Object -First 1
+          if (-not $msi) { throw "cargo-packager did not produce an MSI" }
+          $previousMsi = "target/clipboard-transformer-0.1.0-baseline.msi"
+          Invoke-WebRequest `
+            -Uri "https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.0/clipboard-transformer-0.1.0-x86_64.msi" `
+            -OutFile $previousMsi
+          ./package/windows/verify-msi.ps1 `
+            -MsiPath $msi.FullName `
+            -PreviousMsiPath $previousMsi
+      - name: Upload MSI verification logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: clipboard-transformer-windows-msi-verification-logs
+          path: target/msi-verification/*.log
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@v7
         with:
           name: clipboard-transformer-windows-msi

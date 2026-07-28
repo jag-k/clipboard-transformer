@@ -14,9 +14,21 @@ tag-message = "release: {{version}}"
 
 [[pre-release-replacements]]
 file = "../../CHANGELOG.md"
-search = '## \[Unreleased\] - ReleaseDate'
-replace = '## [{{version}}] - {{date}}'
+search = 'Unreleased'
+replace = '{{version}}'
+prerelease = true
+
+[[pre-release-replacements]]
+file = "../../CHANGELOG.md"
+search = '\.\.\.HEAD'
+replace = '...v{{version}}'
 exactly = 1
+prerelease = true
+
+[[pre-release-replacements]]
+file = "../../CHANGELOG.md"
+search = 'ReleaseDate'
+replace = '{{date}}'
 prerelease = true
 
 [[pre-release-replacements]]
@@ -31,19 +43,34 @@ prerelease = true
 
 [[pre-release-replacements]]
 file = "../../CHANGELOG.md"
-search = '(?m)^\[Unreleased\]:.*$'
-replace = '[{{version}}]: https://github.com/jag-k/clipboard-transformer/releases/tag/{{tag_name}}'
-exactly = 1
-prerelease = true
-
-[[pre-release-replacements]]
-file = "../../CHANGELOG.md"
 search = '<!-- next-url -->'
 replace = """
 <!-- next-url -->
-[Unreleased]: https://github.com/jag-k/clipboard-transformer/compare/{{tag_name}}...HEAD"""
+[Unreleased]: {{repository}}/compare/v{{version}}...HEAD"""
 exactly = 1
 prerelease = true
+
+
+[[pre-release-replacements]]
+file = "../../README.md"
+search = '(?m)^Manual downloads for \*\*v[^*]+\*\*:'
+replace = 'Manual downloads for **v{{version}}**:'
+
+[[pre-release-replacements]]
+file = "../../README.md"
+search = 'releases/download/v[^/]+/(clipboard-transformer(?:-app|-cli)?[-_])\d+\.\d+\.\d+'
+replace = 'releases/download/v{{version}}/${1}{{version}}'
+
+[[pre-release-replacements]]
+file = "../../docs/install.md"
+search = '(?m)^## Manual downloads \(v[^)]+\)'
+replace = '## Manual downloads (v{{version}})'
+
+[[pre-release-replacements]]
+file = "../../docs/install.md"
+search = 'releases/download/v[^/]+/(clipboard-transformer(?:-app|-cli)?[-_])\d+\.\d+\.\d+'
+replace = 'releases/download/v{{version}}/${1}{{version}}'
+
 
 [[pre-release-replacements]]
 file = "../../Packager.toml"
@@ -82,18 +109,15 @@ file = "../../package/homebrew/clipboard-transformer.rb"
 search = '(?m)^  version "[^"]+"$'
 replace = '  version "{{version}}"'
 exactly = 1
-prerelease = true
 
 [[pre-release-replacements]]
 file = "../../package/scoop/clipboard-transformer.json"
 search = '(?m)^  "version": "[^"]+",$'
 replace = '  "version": "{{version}}",'
 exactly = 1
-prerelease = true
 
 [[pre-release-replacements]]
 file = "../../package/scoop/clipboard-transformer.json"
-search = 'releases/download/v[0-9][^/]*/clipboard-transformer-[0-9][^"]*-x86_64-windows-portable\.zip'
-replace = 'releases/download/v{{version}}/clipboard-transformer-{{version}}-x86_64-windows-portable.zip'
+search = 'releases/download/v[^/]+/(clipboard-transformer(?:-app|-cli)?[-_])\d+\.\d+\.\d+'
+replace = 'releases/download/v{{version}}/${1}{{version}}'
 exactly = 1
-prerelease = true

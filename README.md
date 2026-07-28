@@ -1,3 +1,9 @@
+<!-- markdownlint-disable -->
+<div align="center">
+   <img width="256" height="256" src="./assets/generated/linux/app-icon.png" alt="">
+</div>
+<!-- markdownlint-enable -->
+
 # Clipboard Transformer
 
 _A native desktop app that quietly cleans copied text and links using rules you
@@ -14,11 +20,36 @@ diagnostics.
 
 ## Install
 
-The project is preparing its first public release. No GitHub Release or package
-manager entry is published yet, so the current route is building from source.
+Manual downloads for **v0.1.0**:
 
-See [Installation](docs/install.md) for source builds and the planned macOS,
-Windows, Linux, Homebrew, WinGet, Scoop, and AUR packages.
+| Platform | Downloads |
+| --- | --- |
+| macOS, Apple Silicon | [DMG](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.0/clipboard-transformer-0.1.0-aarch64-apple-darwin.dmg) · [app ZIP](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.0/clipboard-transformer-0.1.0-aarch64-apple-darwin.app.zip) · [CLI](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.0/clipboard-transformer-cli-0.1.0-aarch64-apple-darwin.tar.xz) |
+| macOS, Intel | [DMG](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.0/clipboard-transformer-0.1.0-x86_64-apple-darwin.dmg) · [app ZIP](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.0/clipboard-transformer-0.1.0-x86_64-apple-darwin.app.zip) · [CLI](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.0/clipboard-transformer-cli-0.1.0-x86_64-apple-darwin.tar.xz) |
+| Windows, x86-64 | [MSI](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.0/clipboard-transformer-0.1.0-x86_64.msi) · [portable app + CLI](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.0/clipboard-transformer-0.1.0-x86_64-windows-portable.zip) · [app EXE](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.0/clipboard-transformer-app-0.1.0-x86_64.exe) · [CLI EXE](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.0/clipboard-transformer-cli-0.1.0-x86_64.exe) |
+| Linux, x86-64 | [AppImage](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.0/clipboard-transformer-app_0.1.0_x86_64.AppImage) · [DEB](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.0/clipboard-transformer-app_0.1.0_amd64.deb) · [RPM](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.0/clipboard-transformer-0.1.0-1.x86_64.rpm) · [Pacman](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.0/clipboard-transformer-app_0.1.0_x86_64.tar.gz) · [CLI](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.0/clipboard-transformer-cli-0.1.0-x86_64-linux.tar.xz) |
+
+You can also use a published package:
+
+```sh
+# macOS/Linux: installs the app and CLI
+brew install --cask jag-k/tap/clipboard-transformer
+
+# Arch Linux: prebuilt app and CLI
+paru -S clipboard-transformer-bin
+```
+
+```powershell
+# Windows: portable app and CLI
+scoop bucket add jag-k https://github.com/jag-k/scoop-bucket
+scoop install clipboard-transformer
+```
+
+See [Installation](docs/install.md) for the MSI, DMG, AppImage, DEB, RPM,
+Pacman, AUR, Homebrew, Scoop, portable downloads, checksum verification, and
+the separate CLI archives. The desktop app does not require CLI setup.
+
+[![Packaging status](https://repology.org/badge/vertical-allrepos/clipboard-transformer.svg?exclude_unsupported=1)](https://repology.org/project/clipboard-transformer/versions)
 
 ## Desktop app (GUI)
 

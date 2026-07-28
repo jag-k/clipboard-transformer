@@ -150,6 +150,64 @@ The first `JagK.ClipboardTransformer` version must be submitted manually with
 `wingetcreate new` and accepted into `microsoft/winget-pkgs`. The automated job
 can update an existing package id but does not bootstrap it.
 
+Use the public, immutable MSI URL:
+
+```powershell
+winget install Microsoft.WingetCreate
+wingetcreate new "https://github.com/jag-k/clipboard-transformer/releases/download/v<version>/clipboard-transformer-<version>-x86_64.msi"
+```
+
+Supply these required values when WinGetCreate cannot extract them:
+
+```text
+PackageIdentifier: JagK.ClipboardTransformer
+PackageVersion: <version without v>
+DefaultLocale: en-US
+Publisher: jag-k
+PackageName: Clipboard Transformer
+License: MPL-2.0
+ShortDescription: Rule-based clipboard transformer with a tray app and command-line interface
+InstallerType: wix
+Scope: machine
+```
+
+Also provide the repository homepage, issue tracker, versioned license URL,
+inline release notes plus the release-notes URL, installation and configuration
+documentation links, the immutable versioned Windows icon with its SHA-256,
+moniker `clipboard-transformer`, and relevant search tags. Leave `PrivacyUrl`
+unset until the project has an explicit privacy-policy URL.
+
+Review the generated installer manifest and retain these verified fields:
+
+- `Platform: [Windows.Desktop]` and the supported minimum Windows version;
+- `Scope: machine`, all three MSI install modes, and
+  `ElevationRequirement: elevationRequired`;
+- `UpgradeBehavior: install` and command `clipboard-transformer`;
+- the release date plus the MSI `ProductCode`;
+- an Apps & Features entry matching the MSI's display name, publisher,
+  display version, product code, stable upgrade code, and installer type.
+
+WinGetCreate extracts version-specific installer values, but it may not
+preserve all curated metadata when bootstrapping a replacement manifest.
+Recheck the inline release notes, icon, documentation, installation note, and
+installer fields before submission. Do not reuse a previous version's
+installer hash or product code.
+
+For later accepted versions, `publish-winget.yml` runs WingetCreate in two
+phases. `update` first downloads the new MSI and refreshes the package version,
+installer URL, SHA-256, ProductCode, Apps & Features metadata, release date, and
+release-notes URL. The workflow then restores inline release notes from the
+same validated changelog artifact used by the GitHub Release, advances
+version-pinned license/documentation/icon URLs, recalculates the icon SHA-256,
+uploads the resulting manifests for inspection, and only then submits them
+with `wingetcreate submit`. This post-processing is required because
+WingetCreate deliberately clears inline `ReleaseNotes` during a non-interactive
+update and does not advance already-populated versioned metadata URLs.
+
+Validate and sandbox-test the generated manifests as described in
+`packaging-verification.md`; the first PR also requires accepting the Microsoft
+CLA.
+
 The official
 [`wingetcreate` CI guidance](https://github.com/microsoft/winget-create)
 uses a GitHub personal access token with classic `repo` scope. Store that token as

@@ -7,7 +7,7 @@ runtime tests. Validation depth differs by platform and desktop environment.
 | Platform | Desktop integration | Notes |
 | --- | --- | --- |
 | macOS 13+ | AppKit, UserNotifications, `SMAppService` | Primary development environment. |
-| Windows 10/11 | Win32 tray and clipboard, toast activation | MSI and portable registration are implemented; planned artifacts are not code-signed yet. |
+| Windows 10/11 | Win32 tray and clipboard, toast activation | MSI and portable artifacts are published but are not Authenticode-signed yet. |
 | Linux | X11/XWayland or data-control Wayland, portal notifications, StatusNotifierItem | Session capability varies by compositor; run `doctor`. |
 
 Support is best effort across OS versions, distributions, desktop

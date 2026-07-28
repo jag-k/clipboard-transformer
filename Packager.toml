@@ -100,7 +100,6 @@ fragments = ['''
                     Id="CliPath"
                     Guid="49ABC537-F563-4E81-9856-B7F7186EB042"
                     Win64="$(var.Win64)">
-                <Condition><![CDATA[&Environment = 3]]></Condition>
                 <CreateFolder/>
                 <Environment
                         Id="CliPathEnvironment"

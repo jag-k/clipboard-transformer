@@ -13,27 +13,30 @@ CLI formula rather than the required `.app` cask, and its MSI packages CLI
 binaries in a conventional `bin` directory rather than the desktop
 application. Once both important packages require custom jobs, keeping its
 generated release layer adds more configuration than it removes. The standard
-cargo-packager WiX template does most of the Windows work;
-`package/windows/extras.wxs` adds only project-specific registration and CLI
-PATH components.
+cargo-packager WiX template does most of the Windows work. The inline fragment
+in `Packager.toml` adds only project-specific registration and CLI PATH
+components. `package/windows/verify-msi.ps1` installs and removes the result on
+Windows CI instead of treating successful WiX linking as sufficient
+verification.
 
 ## Release artifact matrix
 
 | Platform | Artifact | Builder | Published by | Current status |
 | --- | --- | --- | --- | --- |
-| macOS arm64 | signed CLI `.tar.xz` | custom macOS job | GitHub release workflow | configured; online notarization ticket |
-| macOS x86_64 | signed CLI `.tar.xz` | custom macOS job | GitHub release workflow | configured; online notarization ticket |
-| macOS arm64/x86_64 | signed, notarized `.app.zip` | cargo-packager + custom macOS job | GitHub release workflow | configured; app ticket stapled |
-| macOS arm64/x86_64 | signed, notarized `.dmg` | cargo-packager + custom macOS job | GitHub release workflow | configured; DMG ticket stapled |
-| macOS arm64/x86_64 | Homebrew ZIP containing `.app` plus standalone CLI | custom macOS job | GitHub release workflow | configured; contains the separately notarized CLI bytes |
-| Homebrew | cask installing the macOS `.app` plus CLI, or the Linux x86_64 AppImage plus CLI | release workflow | `jag-k/homebrew-tap` | configured; first Linux install still needs validation |
-| Windows x86_64 | portable `clipboard-transformer-cli-<version>-x86_64.exe` CLI | Cargo/custom job | GitHub release workflow | configured |
-| Windows x86_64 | portable `clipboard-transformer-app-<version>-x86_64.exe` GUI | Cargo/custom job | GitHub release workflow | configured |
-| Windows x86_64 | portable ZIP containing GUI, CLI, and icon | Cargo/custom job | GitHub release workflow | configured |
-| Windows x86_64 | `.msi` | cargo-packager + WiX fragment | GitHub release workflow | configured |
-| Scoop | portable ZIP manifest | release workflow | `jag-k/scoop-bucket` | configured; bucket bootstrap required |
+| macOS arm64 | signed CLI `.tar.xz` | custom macOS job | GitHub release workflow | published |
+| macOS x86_64 | signed CLI `.tar.xz` | custom macOS job | GitHub release workflow | published |
+| macOS arm64/x86_64 | signed, notarized `.app.zip` | cargo-packager + custom macOS job | GitHub release workflow | published; app ticket stapled |
+| macOS arm64/x86_64 | signed, notarized `.dmg` | cargo-packager + custom macOS job | GitHub release workflow | published; DMG ticket stapled |
+| macOS arm64/x86_64 | Homebrew ZIP containing `.app` plus standalone CLI | custom macOS job | GitHub release workflow | published; contains the separately notarized CLI bytes |
+| Homebrew | cask installing the macOS `.app` plus CLI, or the Linux x86_64 AppImage plus CLI | release workflow | `jag-k/homebrew-tap` | published; Linux install still needs validation |
+| Windows x86_64 | portable `clipboard-transformer-cli-<version>-x86_64.exe` CLI | Cargo/custom job | GitHub release workflow | published; unsigned |
+| Windows x86_64 | portable `clipboard-transformer-app-<version>-x86_64.exe` GUI | Cargo/custom job | GitHub release workflow | published; unsigned |
+| Windows x86_64 | portable ZIP containing GUI, CLI, and icon | Cargo/custom job | GitHub release workflow | published; unsigned |
+| Windows x86_64 | `.msi` | cargo-packager + WiX fragment | GitHub release workflow | published; unsigned; corrected PATH upgrade ownership is pending the next release |
+| Scoop | portable ZIP manifest | release workflow | `jag-k/scoop-bucket` | published |
 | WinGet | MSI manifest | `wingetcreate` | custom WinGet job | bootstrap submission required |
-| Linux | CLI archive, Homebrew AppImage + CLI bundle, AppImage, DEB, Pacman package + PKGBUILD, RPM | Cargo / cargo-packager / cargo-generate-rpm | GitHub release workflow | configured; first real release still needs validation |
+| AUR | prebuilt and source-built package bases | release workflow | Arch User Repository | published |
+| Linux | CLI archive, Homebrew AppImage + CLI bundle, AppImage, DEB, Pacman package + PKGBUILD, RPM | Cargo / cargo-packager / cargo-generate-rpm | GitHub release workflow | published; real-session validation remains incomplete |
 
 The custom jobs explicitly package the public `clipboard-transformer` CLI and
 the display-named desktop executable. The macOS job builds the CLI with default
@@ -85,7 +88,16 @@ a recommended post-bootstrap improvement.
 
 The first `JagK.ClipboardTransformer` manifest must be submitted and accepted
 manually. Later stable releases are updated by
-`.github/workflows/publish-winget.yml`; prereleases are skipped.
+`.github/workflows/publish-winget.yml`; prereleases are skipped. The workflow
+generates manifests locally, restores version-specific release notes and
+version-pinned metadata that WingetCreate does not maintain itself, uploads the
+exact submitted files as an Actions artifact, and then opens the package PR.
+
+Do not bootstrap WinGet from the original `0.1.0` MSI. Its CLI is present, but
+an upgrade can migrate the optional Environment feature after the conditional
+PATH component has already been evaluated, leaving the CLI directory off the
+machine `PATH`. The next MSI owns `CliPath` directly through the Environment
+feature and is the first candidate suitable for the catalog.
 
 Scoop publishes to the project-owned `jag-k/scoop-bucket`. The Windows artifact
 job creates one immutable portable ZIP containing the GUI executable, CLI
@@ -120,9 +132,37 @@ missing.
 `just package-linux` builds AppImage, DEB, Pacman archive plus `PKGBUILD`, and
 RPM artifacts; `.github/workflows/build-linux-packages.yml` provides the same
 matrix plus a portable CLI archive and is wired into tagged releases. Treat
-the resulting artifacts as experimental until installed packages pass the
-platform checklist in real X11, GNOME XWayland-bridge, native data-control
-Wayland, Xubuntu, and SteamOS sessions.
+the published artifacts as incompletely validated until installed packages
+pass the platform checklist in real X11, GNOME XWayland-bridge, native
+data-control Wayland, Xubuntu, and SteamOS sessions.
+
+For additional discovery, AppImageHub is the lowest-maintenance next channel:
+it indexes the existing GitHub-hosted AppImage and does not add another build.
+An upstream Nixpkgs submission is useful after a project-owned flake proves the
+runtime dependencies and desktop integration on NixOS.
+
+PPA, COPR, and OBS are build services rather than metadata-only catalogs like
+AUR. They do not simply ingest the current binary DEB/RPM:
+
+- Launchpad PPA accepts a signed Debian source upload and builds it for each
+  selected Ubuntu series;
+- COPR accepts an SRPM/spec or SCM repository containing a valid RPM spec and
+  builds it in selected Fedora/RHEL-family chroots;
+- OBS can reuse both Debian packaging and the RPM spec across several distro
+  families, but requires the largest target/dependency matrix.
+
+Start with COPR because the project already produces RPM metadata, add PPA
+after a proper `debian/` source package exists, then reuse both recipes in OBS.
+Vendor Cargo dependencies for deterministic remote builds and verify that each
+builder can satisfy the workspace's declared Rust version. See
+`linux-catalogs.md` for the concrete bootstrap and automation plan.
+
+Do not plan a Flathub submission under the current application shape. Its
+inclusion policy explicitly rejects tray-only applications and host system
+utilities, while Clipboard Transformer also needs global clipboard access that
+does not map cleanly to the Flatpak sandbox. A Snap would face similar access
+pressure and would likely require manually approved classic confinement, so it
+is lower priority than the native artifacts already published.
 
 ## Required release configuration
 
@@ -133,6 +173,8 @@ whether it is required for prerelease, stable, or optional catalog publishing.
 Apple certificate creation, notarization credentials, and local verification
 are covered in greater depth by
 [macOS signing and notarization](macos-signing.md).
+Windows Authenticode provider choices, signing order, and CI verification are
+covered by [Windows signing](windows-signing.md).
 
 When `MACOS_RELEASE_ENABLED=true`, the central preflight checks signing and
 notarization configuration before starting a macOS runner. The macOS release

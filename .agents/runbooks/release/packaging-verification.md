@@ -93,13 +93,57 @@ are built on the VM with the same commands as
 **MSI:**
 
 ```powershell
-msiexec /i clipboard-transformer-<version>-x86_64.msi /l*v install.log
+$msi = (Resolve-Path .\clipboard-transformer-<version>-x86_64.msi).Path
+$previousMsi = (Resolve-Path .\clipboard-transformer-0.1.0-x86_64.msi).Path
+.\package\windows\verify-msi.ps1 `
+  -MsiPath $msi `
+  -PreviousMsiPath $previousMsi
 ```
 
-Then check: Start Menu entry launches the tray app; an actionable
-notification's buttons work (requires the ToastActivatorCLSID registration);
-`clipboard-transformer.exe --help` from the install dir; uninstall removes the
-Start Menu entry and HKLM CLSID registration.
+Omit `-PreviousMsiPath` for a clean-install-only check. The script requests
+elevation when run locally, performs non-interactive install and uninstall, and
+writes verbose logs under `target/msi-verification`. GitHub-hosted Windows
+runners already run as administrators with UAC disabled. A non-elevated
+GitHub Actions self-hosted runner fails immediately instead of waiting for a
+UAC dialog that nobody can accept.
+
+With `-PreviousMsiPath`, the script installs that MSI before the candidate and
+therefore verifies the real upgrade path. It then checks:
+
+- `Clipboard Transformer.exe` and `bin\clipboard-transformer.exe`;
+- `clipboard-transformer --version` through the installed CLI;
+- the system `PATH` entry for the CLI `bin` directory;
+- the all-users Start Menu shortcut;
+- the HKLM toast activator registration;
+- removal of all installer-owned files, registrations, shortcut, and `PATH`
+  entry.
+
+The `CliPath` component is owned directly by cargo-packager's optional
+`Environment` feature. Do not replace that ownership with a component
+condition based on `&Environment`: component conditions are evaluated before
+`MigrateFeatureStates` during a major upgrade and can silently skip the `PATH`
+entry even when the feature is migrated as selected.
+
+Also run the tray app once and exercise an actionable notification manually;
+the CI smoke test does not start the GUI. Before publishing a changed MSI,
+install the previous public version first and upgrade to the candidate so
+feature migration and `RemoveExistingProducts` are covered on a real machine.
+
+For direct diagnosis, use an elevated silent install and keep the verbose log:
+
+```powershell
+$installLog = Join-Path $PWD "install.log"
+$process = Start-Process msiexec.exe `
+  -Verb RunAs `
+  -ArgumentList "/i `"$msi`" /qn /norestart /l*v `"$installLog`"" `
+  -Wait -PassThru
+$process.ExitCode
+```
+
+Exit `0` is success and `3010` is success with a requested reboot. A bare
+`1603` is only a summary; inspect the lines preceding `Return value 3`.
+Per-machine silent installation from a non-elevated shell commonly returns
+`1603`, so preserve `-Verb RunAs` in manual checks.
 
 **Scoop from a local manifest** (exercises `post_install`/`post_uninstall`
 hooks — they must work under Windows PowerShell 5.1, which Scoop uses):
@@ -117,11 +161,25 @@ scoop uninstall clipboard-transformer   # then confirm Run keys and the app-owne
 **WinGet manifest validation:**
 
 ```powershell
+winget install Microsoft.WingetCreate
 winget settings --enable LocalManifestFiles
-wingetcreate update JagK.ClipboardTransformer --urls <msi url or path> --version <version>  # writes manifests locally without --submit
+
+# First accepted version:
+wingetcreate new "https://github.com/jag-k/clipboard-transformer/releases/download/v<version>/clipboard-transformer-<version>-x86_64.msi"
+
+# Later versions:
+wingetcreate update JagK.ClipboardTransformer --urls <msi URL> --version <version>
+
 winget validate --manifest <generated manifest dir>
-winget install --manifest <generated manifest dir>
+winget install --manifest <generated manifest dir> --silent
+winget uninstall --id JagK.ClipboardTransformer --silent
 ```
+
+The first manifest uses `JagK.ClipboardTransformer`, `en-US`, publisher
+`jag-k`, package name `Clipboard Transformer`, license `MPL-2.0`, installer
+type `wix`, and scope `machine`. WinGetCreate extracts the architecture,
+product code, version, and SHA-256 from the MSI. Test the generated manifest in
+Windows Sandbox before submitting it.
 
 ## Linux: VM or real desktop
 

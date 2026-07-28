@@ -627,7 +627,7 @@ fn yaml_url_import_falls_back_to_cache_when_download_fails() {
     let state_dir = dir.path().join("state");
     let cache_dir = state_dir.join("url-imports");
     fs::create_dir_all(&cache_dir).unwrap();
-    // Reserved TLD guarantees resolution failure, so curl always errors.
+    // Reserved TLD guarantees resolution failure for every HTTP client.
     let url = "https://unreachable.invalid/rules.yaml";
     let cache_path = cache_dir.join(url_cache_file_name(url));
     fs::write(

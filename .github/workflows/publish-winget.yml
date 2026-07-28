@@ -25,19 +25,117 @@ jobs:
             throw "WinGet publication requires WINGET_CREATE_GITHUB_TOKEN"
           }
 
+      - name: Checkout source
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Download release notes
+        uses: actions/download-artifact@v8
+        with:
+          name: release-notes
+          path: release-notes
+
       - name: Install wingetcreate
         shell: pwsh
         run: Invoke-WebRequest https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
 
-      - name: Submit updated manifest
+      - name: Generate updated manifests
         shell: pwsh
         run: |
           $tag = $env:TAG
           $version = $env:VERSION
           $url = "https://github.com/jag-k/clipboard-transformer/releases/download/$tag/clipboard-transformer-$version-x86_64.msi"
+          $releaseNotesUrl = "https://github.com/jag-k/clipboard-transformer/releases/tag/$tag"
 
           .\wingetcreate.exe update JagK.ClipboardTransformer `
             -u $url `
             -v $version `
             -t $env:WINGET_CREATE_GITHUB_TOKEN `
-            --submit
+            --release-notes-url $releaseNotesUrl `
+            --out target/winget-manifests
+
+      - name: Add curated version metadata
+        shell: pwsh
+        run: |
+          $tag = $env:TAG
+          $locale = Get-ChildItem `
+            target/winget-manifests `
+            -Recurse `
+            -Filter "JagK.ClipboardTransformer.locale.en-US.yaml" |
+            Select-Object -First 1
+          if (-not $locale) {
+            throw "WingetCreate did not generate the default locale manifest"
+          }
+
+          $releaseNotes = (Get-Content release-notes/release-notes.md -Raw).Trim()
+          if (-not $releaseNotes) {
+            throw "Release notes artifact is empty"
+          }
+
+          $content = (Get-Content $locale.FullName -Raw) -replace "`r`n", "`n"
+          if ($content -match "(?m)^ReleaseNotes:") {
+            throw "WingetCreate unexpectedly retained inline release notes"
+          }
+          if ($content -notmatch "(?m)^ReleaseNotesUrl:") {
+            throw "Default locale manifest has no ReleaseNotesUrl insertion point"
+          }
+          if (
+            [regex]::Matches($content, "(?m)^ReleaseNotesUrl:").Count -ne 1
+          ) {
+            throw "Default locale manifest has multiple ReleaseNotesUrl fields"
+          }
+
+          $indentedReleaseNotes = (
+            $releaseNotes -split "`r?`n" |
+            ForEach-Object { "  $_" }
+          ) -join "`n"
+          $releaseNotesBlock = "ReleaseNotes: |-" +
+            "`n$indentedReleaseNotes`nReleaseNotesUrl:"
+          $content = $content.Replace("ReleaseNotesUrl:", $releaseNotesBlock)
+
+          $versionedBlobUrl = `
+            "https://github.com/jag-k/clipboard-transformer/blob/$tag/"
+          $content = $content -replace `
+            "https://github\.com/jag-k/clipboard-transformer/blob/v[^/]+/", `
+            $versionedBlobUrl
+
+          $versionedRawUrl = `
+            "https://raw.githubusercontent.com/jag-k/clipboard-transformer/$tag/"
+          $content = $content -replace `
+            "https://raw\.githubusercontent\.com/jag-k/clipboard-transformer/v[^/]+/", `
+            $versionedRawUrl
+
+          $iconHash = (
+            Get-FileHash assets/generated/windows/app-icon.ico -Algorithm SHA256
+          ).Hash
+          if ($content -notmatch "(?m)^  IconSha256:") {
+            throw "Default locale manifest has no versioned icon hash"
+          }
+          $content = $content -replace `
+            "(?m)^  IconSha256: [A-Fa-f0-9]{64}$", `
+            "  IconSha256: $iconHash"
+
+          Set-Content `
+            -Path $locale.FullName `
+            -Value $content `
+            -NoNewline `
+            -Encoding utf8
+
+          "MANIFEST_DIR=$($locale.DirectoryName)" |
+            Out-File $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Upload generated manifests
+        uses: actions/upload-artifact@v7
+        with:
+          name: winget-manifests-${{ inputs.version }}
+          path: target/winget-manifests/**
+          if-no-files-found: error
+
+      - name: Submit updated manifests
+        shell: pwsh
+        run: |
+          .\wingetcreate.exe submit $env:MANIFEST_DIR `
+            --prtitle "Clipboard Transformer $env:VERSION" `
+            --token $env:WINGET_CREATE_GITHUB_TOKEN `
+            --no-open

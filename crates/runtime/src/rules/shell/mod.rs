@@ -804,8 +804,10 @@ fn configure_process_group(command: &mut Command) {
 #[cfg(windows)]
 fn configure_process_group(command: &mut Command) {
     use std::os::windows::process::CommandExt;
-    const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
-    command.creation_flags(CREATE_NEW_PROCESS_GROUP);
+
+    use windows_sys::Win32::System::Threading::{CREATE_NEW_PROCESS_GROUP, CREATE_NO_WINDOW};
+
+    command.creation_flags(CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW);
 }
 
 #[cfg(unix)]
@@ -825,7 +827,9 @@ fn terminate_process_tree(child: &mut std::process::Child) -> Result<()> {
 
 #[cfg(windows)]
 fn terminate_process_tree(child: &mut std::process::Child) -> Result<()> {
-    let status = Command::new("taskkill")
+    let mut command = Command::new("taskkill");
+    crate::platform::environment::configure_command(&mut command);
+    let status = command
         .args(["/PID", &child.id().to_string(), "/T", "/F"])
         .status();
     if status.is_ok_and(|status| status.success()) {

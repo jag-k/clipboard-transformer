@@ -59,16 +59,17 @@ missing requirement. Common fixes are:
 
 ## Install and package formats
 
-There are no published Linux packages yet. Build and launch the application as
-described in the [installation guide](install.md#linux).
+The [installation guide](install.md#linux) covers the published AUR packages,
+AppImage, DEB, Pacman, RPM, Homebrew bundle, and portable CLI archive.
 
-The release pipeline is prepared to produce AppImage, DEB, Pacman, RPM, and a
-portable CLI archive. Native packages install the desktop entry, icon, public
-CLI, desktop host, and D-Bus activation metadata used by the support action in
-fatal startup notifications.
+Native packages and both AUR alternatives install the desktop entry, icon,
+public CLI, desktop host, and D-Bus activation metadata used by the support
+action in fatal startup notifications. The AppImage exposes the desktop
+application but does not install system integration or a system CLI; pair it
+with the separate CLI archive when needed.
 
-Linux is a supported target, but the first public release still needs
-installed-package validation on Xubuntu/X11, GNOME with XWayland, pure
-data-control Wayland, SteamOS, and intentional failure sessions without
-clipboard or tray capabilities. That checklist tracks release confidence, not
-whether the implemented platform is supported.
+Published packages have passed automated build and content checks. Installed
+package validation is still incomplete across Xubuntu/X11, GNOME with
+XWayland, pure data-control Wayland, SteamOS, and intentional failure sessions
+without clipboard or tray capabilities. Release availability is not a claim
+that every compositor and package combination has been exercised.

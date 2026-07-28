@@ -45,6 +45,7 @@ shlex = "2.0"
 tempfile.workspace = true
 thiserror = "1.0"
 toml.workspace = true
+ureq.workspace = true
 url.workspace = true
 uuid.workspace = true
 

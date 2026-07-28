@@ -8,6 +8,50 @@ The format is based on [Keep a Changelog], and this project follows
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+### Added
+
+- **Windows/MSI:** Verify clean installation, upgrades from the public `0.1.0`
+  MSI, the installed app and CLI, machine `PATH`, Start Menu and toast
+  registration, and complete uninstall cleanup in Windows CI.
+- **Release/WinGet:** Upload the fully rendered manifest set before submission
+  so the exact package-catalog changes remain available for inspection.
+
+### Changed
+
+- **Runtime/HTTP:** Download URL imports and plugin modules with an in-process
+  HTTP client, retaining hard timeouts and download-size limits without
+  requiring an external `curl` executable.
+- **Release:** Keep stable manual-download links, Homebrew metadata, and Scoop
+  metadata unchanged during prereleases, then update them automatically for
+  the next stable release.
+
+### Fixed
+
+- **Windows/Runtime:** Prevent background shell rules, process-tree cleanup,
+  and other helper commands from opening console windows.
+- **Windows/MSI:** Keep the optional CLI directory on machine `PATH` after
+  silent installation and major upgrades by assigning its component directly
+  to the WiX Environment feature.
+- **Release/WinGet:** Preserve inline release notes, versioned license,
+  documentation and icon URLs, and the icon SHA-256 when generating an updated
+  catalog manifest.
+- **Release/Changelog:** Generate concrete comparison links during
+  `cargo release` instead of leaving unsupported template placeholders in the
+  release commit.
+
+### Documentation
+
+- **Installation:** Add direct downloads for every published macOS, Windows,
+  and Linux app and CLI format, clarify which distributions include the CLI,
+  and document checksum and GitHub attestation verification.
+- **Platforms:** Replace pre-release package guidance with the published
+  Homebrew, Scoop, AUR, AppImage, DEB, RPM, Pacman, MSI, and portable
+  installation paths while retaining explicit signing and Linux validation
+  boundaries.
+- **Release:** Expand maintainer runbooks for MSI upgrade verification,
+  Windows signing, WinGet bootstrap and metadata review, and future Linux
+  catalog expansion through AppImageHub, COPR, Launchpad, OBS, and Nixpkgs.
+
 ## [0.1.0] - 2026-07-28
 
 ### Added
