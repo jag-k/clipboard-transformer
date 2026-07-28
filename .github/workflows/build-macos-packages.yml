@@ -1,0 +1,356 @@
+name: Build macOS packages
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version matching Cargo.toml
+        required: true
+        type: string
+
+permissions:
+  attestations: write
+  contents: read
+  id-token: write
+
+jobs:
+  build-macos-packages:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            target: aarch64-apple-darwin
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+    runs-on: ${{ matrix.runner }}
+    env:
+      VERSION: ${{ inputs.version }}
+      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_API_KEY: ${{ secrets.APPLE_API_KEY_ID }}
+      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER_ID }}
+      APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Check release credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in \
+            APPLE_CERTIFICATE \
+            APPLE_CERTIFICATE_PASSWORD \
+            APPLE_API_KEY \
+            APPLE_API_ISSUER \
+            APPLE_API_KEY_P8
+          do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing release credential: ${name}" >&2
+              exit 1
+            fi
+          done
+
+      - name: Install Rust
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      - name: Install just
+        uses: ./.github/actions/install-just
+
+      - name: Install cargo-packager
+        uses: ./.github/actions/install-cargo-packager
+
+      - name: Check release version
+        uses: ./.github/actions/check-version
+        with:
+          version: ${{ inputs.version }}
+          info-plist: package/macos/Info.plist
+
+      - name: Prepare release configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Split so the file never contains the literal PEM header: the
+          # detect-private-key pre-commit hook matches that text anywhere and
+          # cannot tell a format check from a leaked key.
+          pem_marker='BEGIN PRIVATE'
+          if [[ "${APPLE_API_KEY_P8}" == *"${pem_marker} KEY"* ]]; then
+            printf '%s\n' "${APPLE_API_KEY_P8}" > "${RUNNER_TEMP}/apple-api-key.p8"
+          else
+            printf '%s' "${APPLE_API_KEY_P8}" |
+              base64 --decode > "${RUNNER_TEMP}/apple-api-key.p8"
+          fi
+          chmod 600 "${RUNNER_TEMP}/apple-api-key.p8"
+          if ! grep -q -- "${pem_marker} KEY" "${RUNNER_TEMP}/apple-api-key.p8"; then
+            echo "APPLE_API_KEY_P8 is neither PEM nor base64 PEM" >&2
+            exit 1
+          fi
+          echo "APPLE_API_KEY_PATH=${RUNNER_TEMP}/apple-api-key.p8" >> "${GITHUB_ENV}"
+
+      - name: Import Developer ID certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          keychain_path="${RUNNER_TEMP}/clipboard-transformer-signing.keychain-db"
+          keychain_password="$(uuidgen)"
+          certificate_encoded="${RUNNER_TEMP}/developer-id.p12.base64"
+          certificate_path="${RUNNER_TEMP}/developer-id.p12"
+
+          printf '%s' "${APPLE_CERTIFICATE}" > "${certificate_encoded}"
+          base64 --decode -i "${certificate_encoded}" -o "${certificate_path}"
+
+          security create-keychain -p "${keychain_password}" "${keychain_path}"
+          security set-keychain-settings -lut 3600 "${keychain_path}"
+          security unlock-keychain -p "${keychain_password}" "${keychain_path}"
+          security import "${certificate_path}" \
+            -k "${keychain_path}" \
+            -P "${APPLE_CERTIFICATE_PASSWORD}" \
+            -T /usr/bin/codesign
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s \
+            -k "${keychain_password}" \
+            "${keychain_path}"
+
+          signing_identity="$(
+            security find-identity -v -p codesigning "${keychain_path}" |
+              sed -nE \
+                's/^[[:space:]]*[0-9]+\) [[:xdigit:]]+ "(Developer ID Application:.*)"$/\1/p' |
+              head -n 1
+          )"
+          if [[ -z "${signing_identity}" ]]; then
+            echo "The imported certificate has no Developer ID Application identity" >&2
+            exit 1
+          fi
+
+          # GitHub-hosted runners are disposable; only the release keychain is
+          # needed by the remaining steps in this job.
+          security list-keychains -d user -s "${keychain_path}"
+
+          echo "APPLE_SIGNING_KEYCHAIN=${keychain_path}" >> "${GITHUB_ENV}"
+          # `just _packager-config` turns this into the git-ignored
+          # Packager.local.toml the packaging step reads, so the tracked
+          # Packager.toml is never rewritten. cargo-packager has no other way
+          # to receive an identity (docs/macos-signing.md).
+          echo "APPLE_SIGNING_IDENTITY=${signing_identity}" >> "${GITHUB_ENV}"
+
+      - name: Build and sign package inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          # `just prepare-package-macos` owns the build flags, the display-named
+          # GUI copy, and the staged icon resources. It completes every Cargo
+          # build before this step signs anything: a later build of another
+          # package target can replace an existing target/release output. The
+          # committed icon assets already exist, so its icon dependency is a
+          # no-op here rather than an actool run.
+          just prepare-package-macos
+
+          codesign \
+            --force \
+            --options runtime \
+            --timestamp \
+            --entitlements package/macos/entitlements.plist \
+            --keychain "${APPLE_SIGNING_KEYCHAIN}" \
+            --sign "${APPLE_SIGNING_IDENTITY}" \
+            target/release/clipboard-transformer
+          codesign --verify --strict --verbose=2 target/release/clipboard-transformer
+
+      - name: Build signed app and DMG
+        shell: bash
+        run: |
+          set -euo pipefail
+          just _packager-config
+
+          # The certificate is already in the shared temporary keychain. Keep
+          # cargo-packager from importing the same p12 into a second keychain.
+          # Notarization is intentionally deferred to the outermost DMG: one
+          # accepted submission creates tickets for both it and the nested app.
+          package_once() {
+            env \
+              -u APPLE_CERTIFICATE \
+              -u APPLE_CERTIFICATE_PASSWORD \
+              -u APPLE_API_KEY \
+              -u APPLE_API_ISSUER \
+              -u APPLE_API_KEY_PATH \
+              -u APPLE_API_KEY_P8 \
+              cargo-packager --config Packager.local.toml --formats app --formats dmg
+          }
+
+          # Developer ID signing contacts Apple's timestamp service. A runner
+          # can reach it for the app signatures and still hit a transient
+          # failure while signing the DMG, so retry only that exact external
+          # failure. Configuration and packaging errors still fail immediately.
+          packager_log="${RUNNER_TEMP}/cargo-packager.log"
+          for attempt in 1 2 3; do
+            set +e
+            package_once 2>&1 | tee "${packager_log}"
+            status="${PIPESTATUS[0]}"
+            set -e
+
+            if [[ "${status}" -eq 0 ]]; then
+              break
+            fi
+            if [[ "${attempt}" -eq 3 ]] ||
+              ! grep -Fq 'A timestamp was expected but was not found' "${packager_log}"
+            then
+              exit "${status}"
+            fi
+
+            echo "Apple timestamp service failed; retrying package signing (${attempt}/3)" >&2
+            sleep "$((attempt * 10))"
+          done
+
+      - name: Stage and notarize release artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          notarize() {
+            local artifact="$1"
+            local result
+            result="$(xcrun notarytool submit "${artifact}" \
+              --key "${APPLE_API_KEY_PATH}" \
+              --key-id "${APPLE_API_KEY}" \
+              --issuer "${APPLE_API_ISSUER}" \
+              --wait \
+              --output-format json)"
+            printf '%s\n' "${result}"
+            if ! jq --exit-status '.status == "Accepted"' <<<"${result}" >/dev/null; then
+              echo "Apple rejected notarization for ${artifact}" >&2
+              exit 1
+            fi
+          }
+
+          version="${VERSION}"
+          app="target/packager/Clipboard Transformer.app"
+          dmg="$(find target/packager -maxdepth 1 -name '*.dmg' -print -quit)"
+          if [[ ! -d "${app}" || -z "${dmg}" ]]; then
+            echo "cargo-packager did not produce both the app bundle and DMG" >&2
+            exit 1
+          fi
+
+          mkdir -p target/distrib
+          app_zip="target/distrib/clipboard-transformer-${version}-${{ matrix.target }}.app.zip"
+          staged_dmg="target/distrib/clipboard-transformer-${version}-${{ matrix.target }}.dmg"
+          homebrew_zip="target/distrib/clipboard-transformer-${version}-${{ matrix.target }}-homebrew.zip"
+          cli_archive="target/distrib/clipboard-transformer-cli-${version}-${{ matrix.target }}.tar.xz"
+          cp "${dmg}" "${staged_dmg}"
+
+          # Apple recommends notarizing the outermost distribution container.
+          # The accepted DMG submission also creates the nested app ticket.
+          notarize "${staged_dmg}"
+          xcrun stapler staple --verbose "${staged_dmg}"
+          xcrun stapler staple --verbose "${app}"
+
+          # Create ZIP distributions only after the app carries its ticket.
+          ditto -c -k --sequesterRsrc --keepParent "${app}" "${app_zip}"
+          homebrew_root="target/homebrew-bundle"
+          rm -rf "${homebrew_root}"
+          mkdir -p "${homebrew_root}"
+          ditto "${app}" "${homebrew_root}/Clipboard Transformer.app"
+          cp \
+            target/release/clipboard-transformer \
+            LICENSE \
+            "${homebrew_root}/"
+          ditto -c -k --sequesterRsrc "${homebrew_root}" "${homebrew_zip}"
+
+          cli_root="target/signed-cli"
+          cli_notary_zip="${RUNNER_TEMP}/clipboard-transformer-cli-notarization.zip"
+          rm -rf "${cli_root}"
+          mkdir -p "${cli_root}"
+          cp target/release/clipboard-transformer README.md LICENSE "${cli_root}/"
+          tar -cJf "${cli_archive}" \
+            -C "${cli_root}" \
+            clipboard-transformer \
+            README.md \
+            LICENSE
+          ditto -c -k --sequesterRsrc "${cli_root}" "${cli_notary_zip}"
+
+          # Notarize the smallest possible ZIP containing the standalone CLI.
+          # Apple associates the online ticket with the signed executable, so
+          # the identical bytes in the Homebrew ZIP and tar.xz are covered too.
+          notarize "${cli_notary_zip}"
+          rm -f "${cli_notary_zip}"
+
+          codesign --verify --strict --verbose=2 target/release/clipboard-transformer
+          codesign --verify --deep --strict --verbose=2 "${app}"
+          codesign --verify --verbose=2 "${staged_dmg}"
+          cli_signature="$(
+            codesign --display --verbose=2 target/release/clipboard-transformer 2>&1
+          )"
+          printf '%s\n' "${cli_signature}"
+          if ! grep -q '^Timestamp=' <<<"${cli_signature}"; then
+            echo "The standalone CLI signature has no secure timestamp" >&2
+            exit 1
+          fi
+
+          # spctl's execute assessment expects an app-like bundle and rejects a
+          # valid bare Mach-O as "does not seem to be an app". The CLI gate is
+          # the Accepted notarytool result above plus signature and timestamp
+          # verification; app and DMG policy assessments remain applicable.
+          spctl --assess --type execute --verbose=2 "${app}"
+          spctl --assess \
+            --type open \
+            --context context:primary-signature \
+            --verbose=2 \
+            "${staged_dmg}"
+          xcrun stapler validate "${app}"
+          xcrun stapler validate "${staged_dmg}"
+
+          for artifact in \
+            "${app_zip}" \
+            "${staged_dmg}" \
+            "${homebrew_zip}" \
+            "${cli_archive}"
+          do
+            # Record the bare artifact name so users can run `shasum -c`
+            # next to the downloaded file (the Windows job does the same).
+            (
+              cd "$(dirname "${artifact}")" &&
+                shasum -a 256 "$(basename "${artifact}")" > "$(basename "${artifact}").sha256"
+            )
+          done
+
+      - name: Remove signing keychain
+        if: always()
+        shell: bash
+        run: |
+          if [[ -n "${APPLE_SIGNING_KEYCHAIN:-}" ]]; then
+            security delete-keychain "${APPLE_SIGNING_KEYCHAIN}" || true
+          fi
+          rm -f \
+            "${RUNNER_TEMP}/developer-id.p12" \
+            "${RUNNER_TEMP}/developer-id.p12.base64" \
+            "${RUNNER_TEMP}/apple-api-key.p8"
+
+      - name: Attest release artifacts
+        uses: actions/attest@v4
+        with:
+          subject-path: target/distrib/*
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: artifacts-macos-${{ matrix.target }}
+          path: |
+            target/distrib/*.app.zip
+            target/distrib/*.app.zip.sha256
+            target/distrib/*.dmg
+            target/distrib/*.dmg.sha256
+            target/distrib/*-homebrew.zip
+            target/distrib/*-homebrew.zip.sha256
+            target/distrib/*.tar.xz
+            target/distrib/*.tar.xz.sha256
+          if-no-files-found: error

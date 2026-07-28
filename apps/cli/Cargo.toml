@@ -1,0 +1,31 @@
+[package]
+name = "ct-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Clipboard Transformer command-line host"
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+publish = false
+
+[[bin]]
+name = "clipboard-transformer"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+chrono.workspace = true
+clap.workspace = true
+ct-clipboard = { workspace = true, features = ["native"] }
+ct-core.workspace = true
+ct-plugin-api.workspace = true
+ct-runtime.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

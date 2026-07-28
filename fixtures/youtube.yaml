@@ -1,0 +1,10 @@
+rules:
+  - type: regexp
+    id: shorts-to-watch
+    name: YouTube Shorts
+    from: '(?:https?://)?(?:www\.)?youtube\.com/shorts/([\w-]+)'
+    to: "https://youtube.com/watch?v=$1"
+    message: "$1 Short has been converted to watch link"
+    formats:
+      - text
+      - url

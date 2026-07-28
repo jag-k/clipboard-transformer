@@ -1,0 +1,23 @@
+name: Install just
+description: >-
+  Install a pinned `just` into ~/.cargo/bin, restored from the actions cache
+  when available. Requires a Rust toolchain. Workflows run Justfile recipes so
+  the build and verification commands have exactly one definition.
+inputs:
+  version:
+    description: just version to install (the single pinned default)
+    required: false
+    default: "1.57.0"
+runs:
+  using: composite
+  steps:
+    - name: Cache just
+      id: cache
+      uses: actions/cache@v5
+      with:
+        path: ~/.cargo/bin/just*
+        key: just-${{ inputs.version }}-${{ runner.os }}-${{ runner.arch }}
+    - name: Install just
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: cargo install just --locked --version "${{ inputs.version }}"

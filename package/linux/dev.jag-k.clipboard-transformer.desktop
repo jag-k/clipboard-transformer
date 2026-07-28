@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Clipboard Transformer
+Comment=Rule-based clipboard transformer
+Exec=clipboard-transformer-app
+Icon=clipboard-transformer-app
+Terminal=false
+Categories=Utility;
+StartupNotify=false
+X-GNOME-UsesNotifications=true

@@ -1,0 +1,53 @@
+name: Check release version
+description: >-
+  Verify the release version matches Cargo.toml, packaging manifests, and
+  optionally the macOS Info.plist (macOS runners only).
+inputs:
+  version:
+    description: Expected release version
+    required: true
+  info-plist:
+    description: >-
+      Optional path to a macOS Info.plist whose CFBundleShortVersionString and
+      CFBundleVersion must also match. Requires a macOS runner (PlistBuddy).
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    - name: Check version consistency
+      shell: bash
+      env:
+        EXPECTED_VERSION: ${{ inputs.version }}
+        INFO_PLIST: ${{ inputs.info-plist }}
+      run: |
+        set -euo pipefail
+        version="${EXPECTED_VERSION}"
+        cargo_version="$(
+          cargo metadata --no-deps --format-version 1 |
+            jq -r '.packages[] | select(.name == "ct-runtime") | .version'
+        )"
+        packager_version="$(
+          sed -nE 's/^version = "([^"]+)"$/\1/p' Packager.toml
+        )"
+        linux_packager_version="$(
+          sed -nE 's/^version = "([^"]+)"$/\1/p' package/linux/Packager.toml
+        )"
+        if [[ "${version}" != "${cargo_version}" \
+          || "${version}" != "${packager_version}" \
+          || "${version}" != "${linux_packager_version}" ]]; then
+          echo "Release (${version}), Cargo.toml (${cargo_version}), Packager.toml (${packager_version}), and Linux Packager.toml (${linux_packager_version}) versions must match" >&2
+          exit 1
+        fi
+        if [[ -n "${INFO_PLIST}" ]]; then
+          plist_short_version="$(
+            /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${INFO_PLIST}"
+          )"
+          plist_bundle_version="$(
+            /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "${INFO_PLIST}"
+          )"
+          if [[ "${version}" != "${plist_short_version}" || "${version}" != "${plist_bundle_version}" ]]; then
+            echo "Release (${version}), CFBundleShortVersionString (${plist_short_version}), and CFBundleVersion (${plist_bundle_version}) must match" >&2
+            exit 1
+          fi
+        fi

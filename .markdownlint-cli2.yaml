@@ -1,0 +1,8 @@
+# The house style wraps prose at 80 columns. Tables and code blocks cannot be
+# wrapped without changing what they mean, so MD013 checks prose only. Every
+# other default rule already passes across the documentation set.
+config:
+  MD013:
+    line_length: 80
+    tables: false
+    code_blocks: false

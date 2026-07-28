@@ -1,0 +1,297 @@
+name: CI
+
+# Every verification step runs through a Justfile recipe so `just ci` locally
+# and this workflow cannot drift apart. The recipes are in the `check`, `test`,
+# and `build` groups of the root Justfile.
+#
+# Swatinem/rust-cache is the only third-party action in the repository. It is
+# confined to this workflow, which holds no credentials and grants only
+# `contents: read`; the release workflows stay on official and local actions and
+# build from a clean target directory.
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  schedule:
+    # A new RUSTSEC advisory, or a new `stable` release that adds a clippy lint,
+    # breaks the build without this repository changing. Weekly is enough to
+    # find both before the next contributor does.
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
+
+# Superseded pull-request runs are pointless; pushes to main are kept so every
+# commit on the default branch keeps its own result.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  format:
+    name: Format
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Install Rust and rustfmt
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install stable --profile minimal --component rustfmt
+          rustup default stable
+      - name: Install just
+        uses: ./.github/actions/install-just
+      - run: just check-fmt
+
+  portable:
+    name: ${{ matrix.os }} (${{ matrix.task }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # macOS is the primary development platform, so it is verified on every
+        # push rather than only when a release tag builds its packages.
+        os:
+          - ubuntu-22.04
+          - macos-14
+          - windows-2025
+        task:
+          - check
+          - test
+          - clippy
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Install Rust
+        shell: bash
+        env:
+          TASK: ${{ matrix.task }}
+        run: |
+          set -euo pipefail
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          case "${TASK}" in
+            check) rustup target add wasm32-unknown-unknown ;;
+            clippy) rustup component add clippy ;;
+          esac
+      - name: Install just
+        uses: ./.github/actions/install-just
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.task }}
+      - name: Verify
+        shell: bash
+        env:
+          TASK: ${{ matrix.task }}
+        run: |
+          set -euo pipefail
+          case "${TASK}" in
+            check) just check check-cli check-wasm ;;
+            test) just test ;;
+            clippy) just check-clippy check-clippy-cli ;;
+          esac
+
+  deny:
+    name: Dependency advisories and licenses
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Install Rust
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+      - name: Install just
+        uses: ./.github/actions/install-just
+      - name: Install cargo-deny
+        uses: ./.github/actions/install-cargo-deny
+      # A new advisory can land without this repository changing at all, so this
+      # job is also the reason `schedule` exists on this workflow.
+      - name: Check advisories, licenses, sources, and duplicates
+        run: just check-deny
+
+  msrv:
+    name: MSRV
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Install Rust
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+      - name: Install just
+        uses: ./.github/actions/install-just
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: msrv
+      # The recipe reads `rust-version` from Cargo.toml and installs that
+      # toolchain, so raising the MSRV needs no workflow edit. Without this job
+      # nothing checks that the declared minimum is still true.
+      - name: Type-check on the declared MSRV
+        run: just check-msrv
+
+  plugins:
+    name: Plugin runtime
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Install Rust and the WASI target
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add wasm32-wasip1
+      - name: Install just
+        uses: ./.github/actions/install-just
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: plugins
+      # Without the built artifact the plugin runtime tests skip themselves, so
+      # plain `cargo test` never exercises Extism, the embedded manifest, or the
+      # host capability checks.
+      - name: Build the example plugin and run the plugin runtime tests
+        run: just test-plugins
+      # The example plugin's build script refreshes its committed manifest. It
+      # is not a workspace member, so the codegen drift tests cannot see it and
+      # only an actual build detects a stale manifest.
+      - name: Check the committed example plugin manifest is current
+        run: git diff --exit-code plugins/gitlab-link/manifest.json
+
+  linux-x11-runtime:
+    name: Linux X11 runtime
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Install Rust and Xvfb
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          sudo apt-get update
+          sudo apt-get install --yes xvfb xauth
+      - name: Install just
+        uses: ./.github/actions/install-just
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: linux-x11
+      - name: Exercise the real X11 clipboard backend
+        run: xvfb-run -a just test-linux-x11
+
+  linux-wayland-runtime:
+    name: Linux Wayland data-control runtime
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Install Rust and headless wlroots compositor
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          sudo apt-get update
+          sudo apt-get install --yes sway
+      - name: Install just
+        uses: ./.github/actions/install-just
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: linux-wayland
+      - name: Exercise the real wlr-data-control clipboard backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime_dir="$(mktemp -d)"
+          chmod 700 "${runtime_dir}"
+          export XDG_RUNTIME_DIR="${runtime_dir}"
+          export WLR_BACKENDS=headless
+          export WLR_LIBINPUT_NO_DEVICES=1
+          export WLR_RENDERER=pixman
+          sway --unsupported-gpu --config /dev/null >"${RUNNER_TEMP}/sway.log" 2>&1 &
+          sway_pid=$!
+          trap 'kill "${sway_pid}" 2>/dev/null || true; cat "${RUNNER_TEMP}/sway.log"' EXIT
+
+          for _ in $(seq 1 100); do
+            wayland_socket="$(find "${runtime_dir}" -maxdepth 1 -type s -name 'wayland-*' -print -quit)"
+            if [[ -n "${wayland_socket}" ]]; then
+              break
+            fi
+            sleep 0.1
+          done
+          if [[ -z "${wayland_socket:-}" ]]; then
+            echo "headless sway did not create a Wayland socket" >&2
+            exit 1
+          fi
+          export WAYLAND_DISPLAY="${wayland_socket##*/}"
+          just test-linux-wayland
+
+  windows-standalone:
+    name: Windows standalone executable
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Install Rust
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+      - name: Install just
+        uses: ./.github/actions/install-just
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: windows-standalone
+      - name: Build and stage the standalone executable
+        run: just build-windows-standalone
+      - uses: actions/upload-artifact@v7
+        with:
+          name: clipboard-transformer-windows-standalone
+          path: target/windows/standalone
+
+  windows-msi:
+    name: Windows MSI
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Install Rust
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+      - name: Install just
+        uses: ./.github/actions/install-just
+      - name: Install cargo-packager
+        uses: ./.github/actions/install-cargo-packager
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: windows-msi
+      - name: Build MSI
+        run: just package-windows-msi
+      - uses: actions/upload-artifact@v7
+        with:
+          name: clipboard-transformer-windows-msi
+          path: target/packager/*.msi
+          if-no-files-found: error

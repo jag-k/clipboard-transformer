@@ -1,0 +1,35 @@
+name: Commit manifest
+description: >-
+  Commit and push one rendered package manifest inside a downstream repository
+  checkout, skipping the commit when the file is unchanged.
+inputs:
+  directory:
+    description: Path to the downstream repository checkout
+    required: true
+  file:
+    description: Repository-relative path of the manifest file to commit
+    required: true
+  message:
+    description: Commit message
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Commit and push
+      shell: bash
+      env:
+        DIRECTORY: ${{ inputs.directory }}
+        FILE: ${{ inputs.file }}
+        MESSAGE: ${{ inputs.message }}
+      run: |
+        set -euo pipefail
+        cd "${DIRECTORY}"
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git add "${FILE}"
+        if git diff --cached --quiet; then
+          echo "${FILE} is already up to date"
+        else
+          git commit -m "${MESSAGE}"
+          git push
+        fi

@@ -1,0 +1,15 @@
+{
+  "id": "dev.jag-k.gitlab",
+  "name": "GitLab Links",
+  "capabilities": [
+    {
+      "kind": "http",
+      "reason": "Fetch resource titles and project names from configured GitLab instances."
+    },
+    {
+      "kind": "env-expansion",
+      "reason": "Resolve ${GITLAB_TOKEN}-style references in instance tokens."
+    }
+  ],
+  "instructions": "Use dev.jag-k.gitlab/project for project roots and static pages; use mr, issue, milestone, pipeline, job, commit, and tag for individual resources; use repository for tree, blob, raw, blame, commits, and compare URLs. MR and issue rules accept comment_display: hidden, marker, id, author, or author-and-id. Set online: false to force offline labels."
+}

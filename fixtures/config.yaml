@@ -1,0 +1,17 @@
+config:
+  double_copy_window: 10
+  disable_for: 600
+
+rules:
+  - import: youtube.yaml
+  - type: ruleset
+    id: cleanup
+    name: Cleanup
+    mode: all-matching
+    formats:
+      - text
+    rules:
+      - id: trim-protocol-example
+        name: Trim protocol example
+        from: '^http://example\.com'
+        to: 'https://example.com'

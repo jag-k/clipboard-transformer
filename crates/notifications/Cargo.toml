@@ -1,0 +1,45 @@
+[package]
+name = "ct-notifications"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Runtime-neutral notification contract for Clipboard Transformer"
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+publish = false
+
+[features]
+native = [
+  "dep:ashpd",
+  "dep:block2",
+  "dep:futures-lite",
+  "dep:futures-util",
+  "dep:objc2",
+  "dep:objc2-foundation",
+  "dep:objc2-user-notifications",
+  "dep:windows",
+  "dep:zbus",
+]
+
+[dependencies]
+anyhow.workspace = true
+ct-i18n.workspace = true
+log.workspace = true
+uuid.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+block2 = { version = "0.6", optional = true }
+objc2 = { version = "0.6", optional = true }
+objc2-foundation = { version = "0.3", optional = true, features = ["NSArray", "NSDictionary", "NSError", "NSObject", "NSSet", "NSString"] }
+objc2-user-notifications = { version = "0.3", optional = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+ashpd = { version = "0.13.13", default-features = false, features = ["async-io", "notification"], optional = true }
+futures-lite = { version = "2.6", optional = true }
+futures-util = { version = "0.3", optional = true }
+zbus = { version = "5.18", default-features = false, features = ["async-io", "blocking-api"], optional = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.61.3", optional = true, features = ["Data_Xml_Dom", "Foundation", "UI_Notifications"] }

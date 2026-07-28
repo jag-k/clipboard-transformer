@@ -1,0 +1,645 @@
+{
+  "$schema": "https://raw.githubusercontent.com/jag-k/clipboard-transformer/main/plugins/manifest.schema.json",
+  "api_version": 1,
+  "author": "jag-k",
+  "capabilities": [
+    {
+      "kind": "http",
+      "reason": "Fetch resource titles and project names from configured GitLab instances."
+    },
+    {
+      "kind": "env-expansion",
+      "reason": "Resolve ${GITLAB_TOKEN}-style references in instance tokens."
+    }
+  ],
+  "description": "Rewrites copied GitLab project, planning, CI/CD, and repository URLs into Markdown links. With a configured instance token and an http grant it fetches resource titles and project names.",
+  "homepage": "https://github.com/jag-k/clipboard-transformer",
+  "id": "dev.jag-k.gitlab",
+  "instructions": "Use dev.jag-k.gitlab/project for project roots and static pages; use mr, issue, milestone, pipeline, job, commit, and tag for individual resources; use repository for tree, blob, raw, blame, commits, and compare URLs. MR and issue rules accept comment_display: hidden, marker, id, author, or author-and-id. Set online: false to force offline labels.",
+  "license": "MPL-2.0",
+  "name": "GitLab Links",
+  "rules": [
+    {
+      "description": "Turns a copied GitLab project URL into a Markdown link. Configurable aliases also match exact project pages such as merge_requests and pipelines; online mode adds the project name when available.",
+      "examples": [
+        {
+          "aliases": {
+            "merge_requests": "MRs",
+            "pipelines": "Pipelines"
+          },
+          "hosts": [
+            "gitlab.com"
+          ],
+          "id": "gitlab-project",
+          "online": true,
+          "type": "dev.jag-k.gitlab/project"
+        }
+      ],
+      "formats": [
+        "text",
+        "url"
+      ],
+      "name": "GitLab project",
+      "settings_schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "description": "Settings for the `project` rule.",
+        "properties": {
+          "aliases": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": {
+              "activity": "Activity",
+              "analytics": "Analytics",
+              "boards": "Issue Boards",
+              "branches": "Branches",
+              "ci/lint": "CI Lint",
+              "container_registry": "Container Registry",
+              "deployments": "Deployments",
+              "environments": "Environments",
+              "feature_flags": "Feature Flags",
+              "forks": "Forks",
+              "infrastructure": "Infrastructure",
+              "issues": "Issues",
+              "jobs": "Jobs",
+              "labels": "Labels",
+              "merge_requests": "MRs",
+              "milestones": "Milestones",
+              "packages": "Packages",
+              "pipeline_schedules": "Pipeline Schedules",
+              "pipelines": "Pipelines",
+              "project_members": "Members",
+              "releases": "Releases",
+              "security/dashboard": "Security Dashboard",
+              "snippets": "Snippets",
+              "tags": "Tags",
+              "wikis/home": "Wiki"
+            },
+            "description": "Exact paths below `/-/` and their display labels. Paths may contain multiple segments, for example `wikis/home`. The rule also always matches the bare project URL. Replace this map to select or add pages.",
+            "type": "object"
+          },
+          "hosts": {
+            "default": [],
+            "description": "GitLab hosts this rule matches. Defaults to the configured instance hosts, or `gitlab.com` when no instances are configured.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "online": {
+            "default": true,
+            "description": "Fetch the project name when a configured instance and HTTP grant are available. Disable for deterministic offline labels.",
+            "type": "boolean"
+          }
+        },
+        "title": "ProjectRuleSettings",
+        "type": "object"
+      },
+      "type": "project"
+    },
+    {
+      "description": "Turns a copied GitLab merge request URL into a Markdown link; with online mode, a configured instance, and an HTTP grant, the real title is included.",
+      "examples": [
+        {
+          "comment_display": "marker",
+          "hosts": [
+            "gitlab.com"
+          ],
+          "id": "gitlab-mr",
+          "online": true,
+          "type": "dev.jag-k.gitlab/mr"
+        }
+      ],
+      "formats": [
+        "text",
+        "url"
+      ],
+      "name": "GitLab merge request",
+      "settings_schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "definitions": {
+          "CommentDisplay": {
+            "description": "How a direct `#note_<id>` issue or merge request link is described.",
+            "oneOf": [
+              {
+                "description": "Do not mention that the URL targets a comment.",
+                "enum": [
+                  "hidden"
+                ],
+                "type": "string"
+              },
+              {
+                "description": "Append `comment`, preserving the original plugin behavior.",
+                "enum": [
+                  "marker"
+                ],
+                "type": "string"
+              },
+              {
+                "description": "Append the GitLab note ID, e.g. `comment 123`.",
+                "enum": [
+                  "id"
+                ],
+                "type": "string"
+              },
+              {
+                "description": "Append `comment by @user`; falls back to the note ID when the author cannot be fetched.",
+                "enum": [
+                  "author"
+                ],
+                "type": "string"
+              },
+              {
+                "description": "Append both the note ID and author; falls back to the note ID when the author cannot be fetched.",
+                "enum": [
+                  "author-and-id"
+                ],
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "description": "Settings for the `mr` and `issue` rules.",
+        "properties": {
+          "comment_display": {
+            "allOf": [
+              {
+                "$ref": "#/definitions/CommentDisplay"
+              }
+            ],
+            "default": "marker",
+            "description": "How direct comment links are identified in the Markdown label."
+          },
+          "hosts": {
+            "default": [],
+            "description": "GitLab hosts this rule matches. Defaults to the configured instance hosts, or `gitlab.com` when no instances are configured.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "online": {
+            "default": true,
+            "description": "Fetch the resource title and, when requested, comment author from a configured instance. Disable for deterministic offline labels.",
+            "type": "boolean"
+          }
+        },
+        "title": "DiscussionRuleSettings",
+        "type": "object"
+      },
+      "type": "mr"
+    },
+    {
+      "description": "Turns a copied GitLab issue URL into a Markdown link; with online mode, a configured instance, and an HTTP grant, the real title is included.",
+      "examples": [
+        {
+          "comment_display": "marker",
+          "hosts": [
+            "gitlab.com"
+          ],
+          "id": "gitlab-issue",
+          "online": true,
+          "type": "dev.jag-k.gitlab/issue"
+        }
+      ],
+      "formats": [
+        "text",
+        "url"
+      ],
+      "name": "GitLab issue",
+      "settings_schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "definitions": {
+          "CommentDisplay": {
+            "description": "How a direct `#note_<id>` issue or merge request link is described.",
+            "oneOf": [
+              {
+                "description": "Do not mention that the URL targets a comment.",
+                "enum": [
+                  "hidden"
+                ],
+                "type": "string"
+              },
+              {
+                "description": "Append `comment`, preserving the original plugin behavior.",
+                "enum": [
+                  "marker"
+                ],
+                "type": "string"
+              },
+              {
+                "description": "Append the GitLab note ID, e.g. `comment 123`.",
+                "enum": [
+                  "id"
+                ],
+                "type": "string"
+              },
+              {
+                "description": "Append `comment by @user`; falls back to the note ID when the author cannot be fetched.",
+                "enum": [
+                  "author"
+                ],
+                "type": "string"
+              },
+              {
+                "description": "Append both the note ID and author; falls back to the note ID when the author cannot be fetched.",
+                "enum": [
+                  "author-and-id"
+                ],
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "description": "Settings for the `mr` and `issue` rules.",
+        "properties": {
+          "comment_display": {
+            "allOf": [
+              {
+                "$ref": "#/definitions/CommentDisplay"
+              }
+            ],
+            "default": "marker",
+            "description": "How direct comment links are identified in the Markdown label."
+          },
+          "hosts": {
+            "default": [],
+            "description": "GitLab hosts this rule matches. Defaults to the configured instance hosts, or `gitlab.com` when no instances are configured.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "online": {
+            "default": true,
+            "description": "Fetch the resource title and, when requested, comment author from a configured instance. Disable for deterministic offline labels.",
+            "type": "boolean"
+          }
+        },
+        "title": "DiscussionRuleSettings",
+        "type": "object"
+      },
+      "type": "issue"
+    },
+    {
+      "description": "Turns a copied GitLab project milestone URL into a Markdown link using GitLab's project%id reference; online mode includes the milestone title.",
+      "examples": [
+        {
+          "hosts": [
+            "gitlab.com"
+          ],
+          "id": "gitlab-milestone",
+          "online": true,
+          "type": "dev.jag-k.gitlab/milestone"
+        }
+      ],
+      "formats": [
+        "text",
+        "url"
+      ],
+      "name": "GitLab milestone",
+      "settings_schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "description": "Per-rule settings shared by resource rule types that can query GitLab.",
+        "properties": {
+          "hosts": {
+            "default": [],
+            "description": "GitLab hosts this rule matches. Defaults to the configured instance hosts, or `gitlab.com` when no instances are configured.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "online": {
+            "default": true,
+            "description": "Fetch the real title when a configured instance and HTTP grant are available. Disable for deterministic offline-only labels.",
+            "type": "boolean"
+          }
+        },
+        "title": "RuleSettings",
+        "type": "object"
+      },
+      "type": "milestone"
+    },
+    {
+      "description": "Turns a copied GitLab pipeline URL into a Markdown link; with online mode, a configured instance, and an HTTP grant, the pipeline name is included when GitLab provides one.",
+      "examples": [
+        {
+          "hosts": [
+            "gitlab.com"
+          ],
+          "id": "gitlab-pipeline",
+          "online": true,
+          "type": "dev.jag-k.gitlab/pipeline"
+        }
+      ],
+      "formats": [
+        "text",
+        "url"
+      ],
+      "name": "GitLab pipeline",
+      "settings_schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "description": "Per-rule settings shared by resource rule types that can query GitLab.",
+        "properties": {
+          "hosts": {
+            "default": [],
+            "description": "GitLab hosts this rule matches. Defaults to the configured instance hosts, or `gitlab.com` when no instances are configured.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "online": {
+            "default": true,
+            "description": "Fetch the real title when a configured instance and HTTP grant are available. Disable for deterministic offline-only labels.",
+            "type": "boolean"
+          }
+        },
+        "title": "RuleSettings",
+        "type": "object"
+      },
+      "type": "pipeline"
+    },
+    {
+      "description": "Turns a copied GitLab CI/CD job URL into a Markdown link; online mode includes the job name.",
+      "examples": [
+        {
+          "hosts": [
+            "gitlab.com"
+          ],
+          "id": "gitlab-job",
+          "online": true,
+          "type": "dev.jag-k.gitlab/job"
+        }
+      ],
+      "formats": [
+        "text",
+        "url"
+      ],
+      "name": "GitLab CI/CD job",
+      "settings_schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "description": "Per-rule settings shared by resource rule types that can query GitLab.",
+        "properties": {
+          "hosts": {
+            "default": [],
+            "description": "GitLab hosts this rule matches. Defaults to the configured instance hosts, or `gitlab.com` when no instances are configured.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "online": {
+            "default": true,
+            "description": "Fetch the real title when a configured instance and HTTP grant are available. Disable for deterministic offline-only labels.",
+            "type": "boolean"
+          }
+        },
+        "title": "RuleSettings",
+        "type": "object"
+      },
+      "type": "job"
+    },
+    {
+      "description": "Turns a copied GitLab commit URL into a Markdown link using GitLab's project@short-sha reference; online mode includes the commit title.",
+      "examples": [
+        {
+          "hosts": [
+            "gitlab.com"
+          ],
+          "id": "gitlab-commit",
+          "online": true,
+          "type": "dev.jag-k.gitlab/commit"
+        }
+      ],
+      "formats": [
+        "text",
+        "url"
+      ],
+      "name": "GitLab commit",
+      "settings_schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "description": "Per-rule settings shared by resource rule types that can query GitLab.",
+        "properties": {
+          "hosts": {
+            "default": [],
+            "description": "GitLab hosts this rule matches. Defaults to the configured instance hosts, or `gitlab.com` when no instances are configured.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "online": {
+            "default": true,
+            "description": "Fetch the real title when a configured instance and HTTP grant are available. Disable for deterministic offline-only labels.",
+            "type": "boolean"
+          }
+        },
+        "title": "RuleSettings",
+        "type": "object"
+      },
+      "type": "commit"
+    },
+    {
+      "description": "Turns a copied GitLab repository tag URL into a Markdown link; online mode includes the tagged commit title.",
+      "examples": [
+        {
+          "hosts": [
+            "gitlab.com"
+          ],
+          "id": "gitlab-tag",
+          "online": true,
+          "type": "dev.jag-k.gitlab/tag"
+        }
+      ],
+      "formats": [
+        "text",
+        "url"
+      ],
+      "name": "GitLab repository tag",
+      "settings_schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "description": "Per-rule settings shared by resource rule types that can query GitLab.",
+        "properties": {
+          "hosts": {
+            "default": [],
+            "description": "GitLab hosts this rule matches. Defaults to the configured instance hosts, or `gitlab.com` when no instances are configured.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "online": {
+            "default": true,
+            "description": "Fetch the real title when a configured instance and HTTP grant are available. Disable for deterministic offline-only labels.",
+            "type": "boolean"
+          }
+        },
+        "title": "RuleSettings",
+        "type": "object"
+      },
+      "type": "tag"
+    },
+    {
+      "description": "Turns selected GitLab tree, blob, raw file, blame, commit-list, and comparison URLs into Markdown links without guessing where a revision ends and a file path begins.",
+      "examples": [
+        {
+          "hosts": [
+            "gitlab.com"
+          ],
+          "id": "gitlab-repository",
+          "kinds": [
+            "tree",
+            "blob",
+            "raw",
+            "blame",
+            "commits",
+            "compare"
+          ],
+          "online": true,
+          "type": "dev.jag-k.gitlab/repository"
+        }
+      ],
+      "formats": [
+        "text",
+        "url"
+      ],
+      "name": "GitLab repository location",
+      "settings_schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "definitions": {
+          "RepositoryLinkKind": {
+            "description": "Repository browser link kinds supported by the `repository` rule.",
+            "oneOf": [
+              {
+                "description": "A repository tree at a revision and optional directory.",
+                "enum": [
+                  "tree"
+                ],
+                "type": "string"
+              },
+              {
+                "description": "A rendered repository file.",
+                "enum": [
+                  "blob"
+                ],
+                "type": "string"
+              },
+              {
+                "description": "A raw repository file.",
+                "enum": [
+                  "raw"
+                ],
+                "type": "string"
+              },
+              {
+                "description": "A repository file blame view.",
+                "enum": [
+                  "blame"
+                ],
+                "type": "string"
+              },
+              {
+                "description": "A commit list for a revision.",
+                "enum": [
+                  "commits"
+                ],
+                "type": "string"
+              },
+              {
+                "description": "A comparison between revisions.",
+                "enum": [
+                  "compare"
+                ],
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "description": "Settings for the `repository` rule.",
+        "properties": {
+          "hosts": {
+            "default": [],
+            "description": "GitLab hosts this rule matches. Defaults to the configured instance hosts, or `gitlab.com` when no instances are configured.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "kinds": {
+            "default": [
+              "tree",
+              "blob",
+              "raw",
+              "blame",
+              "commits",
+              "compare"
+            ],
+            "description": "Repository browser link kinds transformed by this rule.",
+            "items": {
+              "$ref": "#/definitions/RepositoryLinkKind"
+            },
+            "type": "array"
+          },
+          "online": {
+            "default": true,
+            "description": "Fetch the project name when a configured instance and HTTP grant are available. Disable for deterministic offline labels.",
+            "type": "boolean"
+          }
+        },
+        "title": "RepositoryRuleSettings",
+        "type": "object"
+      },
+      "type": "repository"
+    }
+  ],
+  "settings_schema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "definitions": {
+      "Instance": {
+        "description": "One GitLab instance the plugin can talk to.",
+        "properties": {
+          "api_base": {
+            "default": null,
+            "description": "API base URL. Defaults to `https://<host>/api/v4`.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "host": {
+            "description": "Host this instance serves, e.g. `gitlab.example.com`.",
+            "type": "string"
+          },
+          "token": {
+            "default": null,
+            "description": "Personal access token sent as `PRIVATE-TOKEN`. Usually a `${GITLAB_TOKEN}` reference with the `env_expansion` permission granted. Omit it for instances with public projects only.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "host"
+        ],
+        "type": "object"
+      }
+    },
+    "description": "Plugin settings under `plugins.dev.jag-k.gitlab.settings`.",
+    "properties": {
+      "instances": {
+        "default": [],
+        "description": "GitLab instances the plugin may query for real resource titles and project names. Without instances the plugin still works offline and produces short labels like `org/team/project!123`.",
+        "items": {
+          "$ref": "#/definitions/Instance"
+        },
+        "type": "array"
+      }
+    },
+    "title": "PluginSettings",
+    "type": "object"
+  },
+  "version": "0.1.0"
+}

@@ -1,0 +1,22 @@
+name: Install cargo-deny
+description: >-
+  Install a pinned cargo-deny into ~/.cargo/bin, restored from the actions cache
+  when available. Requires a Rust toolchain.
+inputs:
+  version:
+    description: cargo-deny version to install (the single pinned default)
+    required: false
+    default: "0.20.2"
+runs:
+  using: composite
+  steps:
+    - name: Cache cargo-deny
+      id: cache
+      uses: actions/cache@v5
+      with:
+        path: ~/.cargo/bin/cargo-deny*
+        key: cargo-deny-${{ inputs.version }}-${{ runner.os }}-${{ runner.arch }}
+    - name: Install cargo-deny
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: cargo install cargo-deny --locked --version "${{ inputs.version }}"

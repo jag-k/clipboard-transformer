@@ -1,0 +1,31 @@
+[package]
+name = "ct-tray"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Runtime-neutral semantic tray menu model for Clipboard Transformer"
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+publish = false
+
+[features]
+native = ["dep:anyhow", "dep:windows", "dep:ksni", "dep:log", "dep:objc2", "dep:objc2-app-kit", "dep:objc2-foundation", "dep:windows-sys"]
+
+[dependencies]
+anyhow = { workspace = true, optional = true }
+log = { workspace = true, optional = true }
+uuid.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = { version = "0.6", optional = true }
+objc2-app-kit = { version = "0.3", optional = true, features = ["NSApplication", "NSBitmapImageRep", "NSButton", "NSControl", "NSEvent", "NSGraphics", "NSImage", "NSImageRep", "NSMenu", "NSMenuItem", "NSResponder", "NSRunningApplication", "NSStatusBar", "NSStatusBarButton", "NSStatusItem", "NSView"] }
+objc2-foundation = { version = "0.3", optional = true, features = ["NSArray", "NSData", "NSObject", "NSObjCRuntime", "NSString"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+ksni = { version = "0.3.6", default-features = false, features = ["async-io", "blocking"], optional = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.61.3", optional = true, features = ["Win32_Foundation", "Win32_System_Registry"] }
+windows-sys = { version = "0.61", optional = true, features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_LibraryLoader", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
