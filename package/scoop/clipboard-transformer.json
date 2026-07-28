@@ -4,13 +4,13 @@
     "The published bucket manifest always points to the latest stable release; autoupdate describes how the next concrete manifest revision is generated.",
     "Scoop runs uninstall hooks during updates too; old_version is present in that path and prevents removal of the user's autostart preference."
   ],
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Rule-based clipboard transformer with a tray app and command-line interface",
   "license": "MPL-2.0",
   "homepage": "https://github.com/jag-k/clipboard-transformer",
   "architecture": {
     "64bit": {
-      "url": "https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.0/clipboard-transformer-0.1.0-x86_64-windows-portable.zip",
+      "url": "https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.1/clipboard-transformer-0.1.1-x86_64-windows-portable.zip",
       "hash": "PORTABLE_ZIP_SHA256"
     }
   },

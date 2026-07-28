@@ -570,7 +570,7 @@ dependencies = [
 
 [[package]]
 name = "codegen"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "ct-plugin-api",
@@ -813,7 +813,7 @@ dependencies = [
 
 [[package]]
 name = "ct-cli"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -831,7 +831,7 @@ dependencies = [
 
 [[package]]
 name = "ct-clipboard"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "encoding_rs",
@@ -853,7 +853,7 @@ dependencies = [
 
 [[package]]
 name = "ct-config"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "ct-core",
@@ -866,7 +866,7 @@ dependencies = [
 
 [[package]]
 name = "ct-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "ct-clipboard",
@@ -879,7 +879,7 @@ dependencies = [
 
 [[package]]
 name = "ct-desktop"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "ct-clipboard",
@@ -893,7 +893,7 @@ dependencies = [
 
 [[package]]
 name = "ct-host-loop"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "log",
@@ -905,7 +905,7 @@ dependencies = [
 
 [[package]]
 name = "ct-i18n"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "chrono",
  "isolang",
@@ -915,7 +915,7 @@ dependencies = [
 
 [[package]]
 name = "ct-notifications"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "ashpd",
@@ -934,7 +934,7 @@ dependencies = [
 
 [[package]]
 name = "ct-plugin-api"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "ct-clipboard",
@@ -945,7 +945,7 @@ dependencies = [
 
 [[package]]
 name = "ct-runtime"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "ashpd",
@@ -991,7 +991,7 @@ dependencies = [
 
 [[package]]
 name = "ct-tray"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "ksni",
