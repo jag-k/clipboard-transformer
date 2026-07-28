@@ -1,0 +1,64 @@
+[package]
+name = "ct-clipboard"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Portable clipboard model and backend contract for Clipboard Transformer"
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+publish = false
+
+# `native` is opt-in rather than a default feature: every internal dependant
+# uses `default-features = false` through the workspace table, and a browser
+# host wants the item model, formats, and codecs with no platform crate at all.
+[features]
+native = [
+  "dep:libc",
+  "dep:objc2-app-kit",
+  "dep:objc2-foundation",
+  "dep:wayland-client",
+  "dep:wayland-protocols",
+  "dep:wayland-protocols-wlr",
+  "dep:wl-clipboard-rs",
+  "dep:windows-sys",
+  "dep:x11rb",
+]
+
+[dependencies]
+anyhow.workspace = true
+encoding_rs.workspace = true
+log.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_bytes.workspace = true
+serde_json.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-app-kit = { version = "0.3", optional = true, features = ["NSPasteboard", "NSRunningApplication", "NSWorkspace"] }
+objc2-foundation = { version = "0.3", optional = true, features = ["NSArray", "NSData", "NSDictionary", "NSObject", "NSString"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = { version = "0.2", optional = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+wayland-client = { version = "0.31.14", optional = true, features = ["system", "dlopen"] }
+wayland-protocols = { version = "0.32.13", optional = true, features = ["client", "staging"] }
+wayland-protocols-wlr = { version = "0.3.12", optional = true, features = ["client"] }
+wl-clipboard-rs = { version = "0.9.3", optional = true }
+x11rb = { version = "0.14", optional = true, features = ["xfixes"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.61", optional = true, features = [
+  "Win32_Foundation",
+  "Win32_Graphics_Gdi",
+  "Win32_Storage_FileSystem",
+  "Win32_System_DataExchange",
+  "Win32_System_LibraryLoader",
+  "Win32_System_Memory",
+  "Win32_Security",
+  "Win32_System_Threading",
+  "Win32_UI_Shell",
+  "Win32_UI_WindowsAndMessaging",
+] }

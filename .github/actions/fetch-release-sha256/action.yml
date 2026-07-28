@@ -1,0 +1,28 @@
+name: Fetch release asset SHA-256
+description: >-
+  Download a .sha256 sidecar from a GitHub release and return the hex digest
+  from its first field, validating the digest shape.
+inputs:
+  url:
+    description: Full URL of the .sha256 asset
+    required: true
+outputs:
+  sha256:
+    description: The 64-character hex digest
+    value: ${{ steps.fetch.outputs.sha256 }}
+runs:
+  using: composite
+  steps:
+    - name: Fetch and validate digest
+      id: fetch
+      shell: bash
+      env:
+        URL: ${{ inputs.url }}
+      run: |
+        set -euo pipefail
+        sha256="$(curl --proto '=https' --tlsv1.2 -LsSf "${URL}" | awk '{print $1}')"
+        if [[ ! "${sha256}" =~ ^[0-9a-f]{64}$ ]]; then
+          echo "Fetched ${URL} but got an invalid SHA-256: ${sha256}" >&2
+          exit 1
+        fi
+        echo "sha256=${sha256}" >> "${GITHUB_OUTPUT}"

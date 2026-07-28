@@ -1,0 +1,23 @@
+[package]
+name = "ct-host-loop"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Main-thread ownership and native event pumping for Clipboard Transformer hosts"
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+publish = false
+
+[dependencies]
+anyhow.workspace = true
+log.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", features = ["NSApplication", "NSEvent", "NSResponder"] }
+objc2-foundation = { version = "0.3", features = ["NSDate", "NSObjCRuntime", "NSRunLoop"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }

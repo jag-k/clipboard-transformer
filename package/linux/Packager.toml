@@ -1,0 +1,54 @@
+"$schema" = "https://raw.githubusercontent.com/crabnebula-dev/cargo-packager/main/crates/packager/schema.json"
+
+name = "clipboard-transformer"
+productName = "Clipboard Transformer"
+version = "0.1.0"
+identifier = "dev.jag-k.clipboard-transformer"
+description = "Rule-based clipboard transformer"
+homepage = "https://github.com/jag-k/clipboard-transformer"
+authors = ["jag-k"]
+publisher = "jag-k"
+copyright = "Copyright (c) 2026 jag-k"
+licenseFile = "../../LICENSE"
+category = "Utility"
+icons = ["../../assets/generated/linux/app-icon.png"]
+outDir = "../../target/packager"
+binariesDir = "../../target/release"
+
+[[binaries]]
+path = "clipboard-transformer-app"
+main = true
+
+[[binaries]]
+path = "clipboard-transformer"
+
+[linux]
+generateDesktopEntry = false
+
+[deb]
+depends = ["libc6", "xdg-desktop-portal"]
+section = "utils"
+priority = "optional"
+packageName = "clipboard-transformer"
+
+[deb.files]
+"dev.jag-k.clipboard-transformer.desktop" = "usr/share/applications/dev.jag-k.clipboard-transformer.desktop"
+"dev.jag-k.clipboard-transformer.service" = "usr/share/dbus-1/services/dev.jag-k.clipboard-transformer.service"
+"../../assets/tray.svg" = "usr/share/icons/hicolor/scalable/status/clipboard-transformer-symbolic.svg"
+"../../LICENSE" = "usr/share/doc/clipboard-transformer/copyright"
+
+[pacman]
+depends = ["glibc", "xdg-desktop-portal"]
+provides = ["clipboard-transformer"]
+
+[pacman.files]
+"dev.jag-k.clipboard-transformer.desktop" = "usr/share/applications/dev.jag-k.clipboard-transformer.desktop"
+"dev.jag-k.clipboard-transformer.service" = "usr/share/dbus-1/services/dev.jag-k.clipboard-transformer.service"
+"../../assets/tray.svg" = "usr/share/icons/hicolor/scalable/status/clipboard-transformer-symbolic.svg"
+"../../LICENSE" = "usr/share/licenses/clipboard-transformer/LICENSE"
+
+[appimage.files]
+"dev.jag-k.clipboard-transformer.desktop" = "usr/share/applications/clipboard-transformer-app.desktop"
+"../../assets/tray.svg" = "usr/share/icons/hicolor/scalable/status/clipboard-transformer-symbolic.svg"
+"appimage-hicolor.index.theme" = "usr/share/icons/hicolor/index.theme"
+"../../LICENSE" = "usr/share/licenses/clipboard-transformer/LICENSE"

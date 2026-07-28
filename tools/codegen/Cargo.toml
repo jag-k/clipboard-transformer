@@ -1,0 +1,22 @@
+[package]
+name = "codegen"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Repository-only generators for committed Clipboard Transformer artifacts"
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+publish = false
+
+# Deliberately outside the application graph: generators must not be linked
+# into the runtime, and generating JSON from serde types must not drag in
+# Extism/wasmtime or any native platform crate.
+[dependencies]
+anyhow.workspace = true
+ct-plugin-api.workspace = true
+resvg = { version = "0.44", default-features = false }
+schemars.workspace = true
+serde_json.workspace = true
+serde_yaml.workspace = true

@@ -1,0 +1,20 @@
+[package]
+name = "ct-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Portable transformation core for Clipboard Transformer"
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+publish = false
+
+[dependencies]
+anyhow.workspace = true
+ct-clipboard.workspace = true
+regex.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+url.workspace = true

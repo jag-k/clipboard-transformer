@@ -1,0 +1,17 @@
+[package]
+name = "ct-i18n"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Locale detection and localized text formatting for Clipboard Transformer"
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+publish = false
+
+[dependencies]
+chrono.workspace = true
+isolang = "2.4"
+sys-locale = "0.3"
+timeago = { version = "0.5", features = ["isolang"] }

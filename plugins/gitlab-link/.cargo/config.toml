@@ -1,0 +1,4 @@
+# Keep the official XTP Rust template target. The host provides basic WASI
+# clocks/randomness but does not preopen filesystem directories.
+[build]
+target = "wasm32-wasip1"

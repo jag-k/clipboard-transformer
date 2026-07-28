@@ -1,0 +1,43 @@
+# Development recipes for the gitlab-link example plugin.
+# Manual: https://just.systems/man/en/
+
+set ignore-comments
+
+[unix]
+set shell := ["sh", "-cu"]
+
+[windows]
+set shell := ["powershell.exe", "-NoLogo", "-NoProfile", "-Command"]
+
+wasm_target := "wasm32-wasip1"
+artifact := "target" / wasm_target / "release" / "gitlab_link.wasm"
+
+# List recipes when invoked as `just` with no arguments.
+[private]
+default:
+    @just --list --unsorted
+
+[doc('Build the release wasm module')]
+build:
+    cargo build --target {{ wasm_target }} --release
+
+[doc('Build and copy the module into the discovered plugins directory')]
+[unix]
+install: build
+    plugins_dir="$(clipboard-transformer plugin paths | sed -n 's/^plugins_dir=//p')"; \
+    mkdir -p "$plugins_dir"; \
+    cp {{ artifact }} "$plugins_dir/"; \
+    echo "installed $plugins_dir/gitlab_link.wasm"
+
+[doc('Print the assembled manifest that gets embedded into the module')]
+[unix]
+manifest: build
+    cat manifest.json
+
+[doc('Generate a pristine Rust project from the host XTP schema')]
+regenerate output="/tmp/clipboard-transformer-gitlab-link":
+    xtp plugin init --schema-file ../plugin-api-v1.xtp.yaml --path {{ quote(output) }} --name gitlab-link --template Rust --feature none --yes
+
+[doc('Run the host test suite against this plugin')]
+test: build
+    cargo test --locked --manifest-path ../../Cargo.toml --test plugins_runtime

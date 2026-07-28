@@ -1,0 +1,108 @@
+name: Build Windows MSI
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version matching Cargo.toml
+        required: true
+        type: string
+
+permissions:
+  attestations: write
+  contents: read
+  id-token: write
+
+jobs:
+  build-windows-msi:
+    runs-on: windows-2025
+    env:
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Install Rust
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      - name: Install just
+        uses: ./.github/actions/install-just
+
+      - name: Install cargo-packager
+        uses: ./.github/actions/install-cargo-packager
+
+      - name: Check release version
+        uses: ./.github/actions/check-version
+        with:
+          version: ${{ inputs.version }}
+
+      # `just package-windows-msi` owns the build flags, the display-named GUI
+      # copy, the staged CLI under packager-resources/bin, and the WiX call.
+      - name: Build MSI
+        run: just package-windows-msi
+
+      - name: Stage release artifacts
+        id: stage
+        shell: pwsh
+        run: |
+          $version = $env:VERSION
+          $msiSource = Get-ChildItem target/packager/*.msi | Select-Object -First 1
+          if (-not $msiSource) { throw "cargo-packager did not produce an MSI" }
+
+          New-Item -ItemType Directory -Force target/distrib | Out-Null
+          # GitHub replaces spaces in release asset names with dots, which
+          # would break the matching .sha256 sidecar; publish the GUI
+          # executable under a space-free name instead.
+          $artifacts = @(
+            @($msiSource.FullName, "clipboard-transformer-$version-x86_64.msi"),
+            @("target/release/Clipboard Transformer.exe", "clipboard-transformer-app-$version-x86_64.exe"),
+            @("target/release/clipboard-transformer.exe", "clipboard-transformer-cli-$version-x86_64.exe")
+          )
+
+          foreach ($artifact in $artifacts) {
+            $source = $artifact[0]
+            $name = $artifact[1]
+            $destination = Join-Path target/distrib $name
+            Copy-Item $source $destination
+            $hash = (Get-FileHash $destination -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $name" | Set-Content "$destination.sha256" -NoNewline
+          }
+
+          $portableDir = "target/windows-portable"
+          $portableName = "clipboard-transformer-$version-x86_64-windows-portable.zip"
+          $portableZip = Join-Path target/distrib $portableName
+          New-Item -ItemType Directory -Force $portableDir | Out-Null
+          Copy-Item "target/release/Clipboard Transformer.exe" $portableDir
+          Copy-Item "target/release/clipboard-transformer.exe" $portableDir
+          Copy-Item "assets/generated/windows/app-icon.ico" $portableDir
+          Copy-Item LICENSE $portableDir
+          Compress-Archive -Path "$portableDir/*" -DestinationPath $portableZip -CompressionLevel Optimal
+          $portableHash = (Get-FileHash $portableZip -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$portableHash  $portableName" | Set-Content "$portableZip.sha256" -NoNewline
+
+      - name: Attest release artifacts
+        uses: actions/attest@v4
+        with:
+          subject-path: target/distrib/*
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: artifacts-windows-msi
+          path: |
+            target/distrib/*.msi
+            target/distrib/*.msi.sha256
+            target/distrib/*.exe
+            target/distrib/*.exe.sha256
+            target/distrib/*-portable.zip
+            target/distrib/*-portable.zip.sha256
+          if-no-files-found: error

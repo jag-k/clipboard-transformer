@@ -1,0 +1,49 @@
+[package]
+name = "ct-desktop"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Clipboard Transformer desktop host"
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+publish = false
+
+[package.metadata.generate-rpm]
+name = "clipboard-transformer"
+release = "1"
+assets = [
+  { source = "target/release/clipboard-transformer-app", dest = "/usr/bin/clipboard-transformer-app", mode = "755" },
+  { source = "target/release/clipboard-transformer", dest = "/usr/bin/clipboard-transformer", mode = "755" },
+  { source = "package/linux/dev.jag-k.clipboard-transformer.desktop", dest = "/usr/share/applications/dev.jag-k.clipboard-transformer.desktop", mode = "644" },
+  { source = "package/linux/dev.jag-k.clipboard-transformer.service", dest = "/usr/share/dbus-1/services/dev.jag-k.clipboard-transformer.service", mode = "644" },
+  { source = "assets/generated/linux/app-icon.png", dest = "/usr/share/icons/hicolor/256x256/apps/clipboard-transformer-app.png", mode = "644" },
+  { source = "assets/tray.svg", dest = "/usr/share/icons/hicolor/scalable/status/clipboard-transformer-symbolic.svg", mode = "644" },
+  { source = "LICENSE", dest = "/usr/share/licenses/clipboard-transformer/LICENSE", mode = "644" },
+]
+
+[package.metadata.generate-rpm.requires]
+glibc = "*"
+xdg-desktop-portal = "*"
+
+[[bin]]
+name = "clipboard-transformer-app"
+path = "src/main.rs"
+required-features = ["desktop"]
+
+[features]
+default = ["desktop"]
+desktop = ["ct-runtime/desktop"]
+
+[dependencies]
+anyhow.workspace = true
+ct-clipboard = { workspace = true, features = ["native"] }
+ct-core.workspace = true
+ct-notifications = { workspace = true, features = ["native"] }
+ct-host-loop.workspace = true
+ct-tray = { workspace = true, features = ["native"] }
+ct-runtime.workspace = true
+
+[build-dependencies]
+winresource = "0.1.31"

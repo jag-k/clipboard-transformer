@@ -1,0 +1,188 @@
+use std::collections::BTreeMap;
+use std::path::Path;
+
+use anyhow::{bail, Context, Result};
+use ct_core::{AppMatcher, AppMode, RawRule};
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(default)]
+pub struct AppConfig {
+    /// Number of recent transformations shown in the tray. Set to 0 to hide the section.
+    pub recent_items_count: usize,
+    /// Maximum total clipboard representation bytes processed per item. Set to 0 for no limit.
+    pub max_item_bytes: u64,
+    /// Maximum combined before/after payload bytes retained in history. Set to 0 for no limit.
+    pub max_history_bytes: u64,
+    /// Persist the latest external clipboard item for the explicit CLI inspect command.
+    pub persist_last_clipboard: bool,
+    /// Double-copy bypass window in seconds. Set to 0 to disable the bypass.
+    pub double_copy_window: u64,
+    /// Default notification "Disable" action timeout in seconds. Set to 0 to hide the action.
+    pub disable_for: u64,
+    /// Source applications to filter globally. Values match bundle id or app name.
+    pub apps: Vec<String>,
+    /// How to interpret apps globally: blacklist skips listed apps; whitelist only allows listed apps.
+    pub app_mode: Option<AppMode>,
+    /// URL import refresh interval in seconds. Set to 0 to never download URL imports.
+    pub import_refresh_interval: u64,
+    /// Explicit editor command and argument templates used by Edit rule.
+    pub editor: Option<EditorConfig>,
+    /// Host-owned authorization for native shell rule providers.
+    pub shell: ShellConfig,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(default)]
+pub struct ShellConfig {
+    /// Enables trusted shell and item-shell rules for this native host.
+    pub enabled: bool,
+    /// Permits shell rules declared by local filesystem imports.
+    pub local_imports: bool,
+    /// Permits explicitly pinned shell rules declared by URL imports.
+    pub remote_imports: bool,
+}
+
+impl Default for ShellConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            local_imports: true,
+            remote_imports: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct EditorConfig {
+    /// Editor executable or launcher path. Arguments belong in `args`.
+    #[schemars(length(min = 1))]
+    pub command: String,
+    /// Argument templates. Supports {file}, {line}, and {column}.
+    #[serde(default)]
+    pub args: Vec<String>,
+}
+
+impl Default for AppConfig {
+    fn default() -> Self {
+        Self {
+            recent_items_count: 5,
+            max_item_bytes: 100 * 1024 * 1024,
+            max_history_bytes: 512 * 1024 * 1024,
+            persist_last_clipboard: false,
+            double_copy_window: 10,
+            disable_for: 600,
+            apps: Vec::new(),
+            app_mode: None,
+            import_refresh_interval: 600,
+            editor: None,
+            shell: ShellConfig::default(),
+        }
+    }
+}
+
+impl AppConfig {
+    pub fn app_matcher(&self) -> Result<AppMatcher> {
+        AppMatcher::compile(self.apps.clone(), self.app_mode)
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(default)]
+pub struct ConfigDocument {
+    pub config: AppConfig,
+    pub rules: Vec<RawRule>,
+    /// Per-plugin permissions and settings, keyed by plugin id. Imported
+    /// documents intentionally contribute rules only.
+    pub plugins: BTreeMap<String, PluginConfig>,
+}
+
+/// Per-plugin configuration under the top-level `plugins` mapping.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct PluginConfig {
+    /// Host-enforced capability grants for this plugin.
+    pub permissions: PluginPermissions,
+    /// Opaque plugin-owned settings. The host does not define keys inside it.
+    pub settings: serde_json::Value,
+}
+
+/// Host-owned capability grants. Effective capabilities are the intersection
+/// of manifest-requested capabilities and these grants.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct PluginPermissions {
+    /// Hostname patterns passed to the runtime's network policy.
+    pub http: Vec<String>,
+    /// Expands `$VAR`-style references in plugin settings before initialization.
+    pub env_expansion: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConfigFormat {
+    Yaml,
+    Toml,
+}
+
+impl ConfigFormat {
+    pub fn from_path(path: &Path) -> Result<Self> {
+        match path.extension().and_then(|ext| ext.to_str()) {
+            Some("yaml" | "yml") => Ok(Self::Yaml),
+            Some("toml") => Ok(Self::Toml),
+            _ => bail!("unsupported config extension for {}", path.display()),
+        }
+    }
+}
+
+/// Parses one self-contained document. Import resolution and host I/O remain
+/// the responsibility of the caller.
+pub fn parse_document(text: &str, format: ConfigFormat) -> Result<ConfigDocument> {
+    match format {
+        ConfigFormat::Yaml => serde_yaml::from_str(text).context("parse YAML config"),
+        ConfigFormat::Toml => toml::from_str(text).context("parse TOML config"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn portable_yaml_document_parses_without_host_services() {
+        let document = parse_document(
+            "config:\n  max_item_bytes: 42\nrules: []\n",
+            ConfigFormat::Yaml,
+        )
+        .unwrap();
+        assert_eq!(document.config.max_item_bytes, 42);
+    }
+
+    #[test]
+    fn plugin_config_parses_settings_and_permissions() {
+        let config: PluginConfig = serde_yaml::from_str(
+            r#"
+permissions:
+  http:
+    - gitlab.example.com
+  env_expansion: true
+settings:
+  instances:
+    - id: work
+      token: ${GITLAB_TOKEN}
+"#,
+        )
+        .unwrap();
+        assert!(config.permissions.env_expansion);
+        assert_eq!(config.permissions.http, ["gitlab.example.com"]);
+        assert!(config.settings.get("instances").is_some());
+    }
+
+    #[test]
+    fn unknown_permission_keys_are_rejected() {
+        let error = serde_yaml::from_str::<PluginConfig>("permissions:\n  sockets: true\n")
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("sockets"), "{error}");
+    }
+}

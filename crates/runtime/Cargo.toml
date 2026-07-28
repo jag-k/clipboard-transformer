@@ -1,0 +1,107 @@
+[package]
+name = "ct-runtime"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Shared application runtime for Clipboard Transformer hosts"
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+publish = false
+
+[package.metadata.release]
+# Cargo-release needs one package to own the shared workspace release. Root
+# replacements are resolved relative to this manifest and run exactly once.
+release = true
+
+[dependencies]
+anyhow.workspace = true
+base64.workspace = true
+auto-launch = { version = "0.6", optional = true }
+chrono.workspace = true
+ciborium = "0.2"
+ct-core.workspace = true
+ct-clipboard = { workspace = true, features = ["native"] }
+ct-config.workspace = true
+ct-notifications = { workspace = true, features = ["native"], optional = true }
+ct-i18n.workspace = true
+ct-plugin-api.workspace = true
+ct-tray = { workspace = true, features = ["native"], optional = true }
+directories = "5.0"
+dotenvy = "0.15.7"
+extism = "1.30"
+extism-manifest = "1.30"
+glob = "0.3"
+log.workspace = true
+notify = { version = "8.2", optional = true }
+schemars.workspace = true
+serde.workspace = true
+serde_bytes.workspace = true
+serde_json.workspace = true
+sha2 = "0.10"
+serde_yaml.workspace = true
+shlex = "2.0"
+tempfile.workspace = true
+thiserror = "1.0"
+toml.workspace = true
+url.workspace = true
+uuid.workspace = true
+
+# Platform crates belong to whichever crate talks to them: AppKit and the
+# Objective-C runtime to ct-clipboard/ct-tray/ct-notifications/ct-host-loop,
+# X11 and Wayland to ct-clipboard, StatusNotifierItem to ct-tray. This manifest
+# keeps only what crates/runtime/src calls itself.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+ashpd = { version = "0.13.13", default-features = false, features = ["async-io", "notification", "open_uri"], optional = true }
+futures-lite = { version = "2.6", optional = true }
+futures-util = { version = "0.3", optional = true }
+zbus = { version = "5.18", default-features = false, features = ["async-io", "blocking-api"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.61.3", optional = true, features = [
+  "Data_Xml_Dom",
+  "Foundation",
+  "UI_Notifications",
+  "Win32_Foundation",
+  "Win32_System_Com",
+  "Win32_System_Com_StructuredStorage",
+  "Win32_System_Registry",
+  "Win32_System_Variant",
+  "Win32_UI_Shell",
+  "Win32_UI_Shell_PropertiesSystem",
+] }
+windows-core = { version = "0.61.2", optional = true }
+windows-sys = { version = "0.61", features = [
+  "Win32_Foundation",
+  "Win32_Graphics_Gdi",
+  "Win32_Storage_FileSystem",
+  "Win32_System_DataExchange",
+  "Win32_System_LibraryLoader",
+  "Win32_System_Memory",
+  "Win32_Security",
+  "Win32_System_Threading",
+  "Win32_UI_Shell",
+  "Win32_UI_WindowsAndMessaging",
+] }
+
+[features]
+default = ["desktop"]
+desktop = [
+  "dep:auto-launch",
+  "dep:ashpd",
+  "dep:ct-notifications",
+  "dep:ct-tray",
+  "dep:futures-lite",
+  "dep:futures-util",
+  "dep:notify",
+  "dep:windows",
+  "dep:windows-core",
+]
+native-notifications = []
+
+[dev-dependencies]
+tempfile.workspace = true

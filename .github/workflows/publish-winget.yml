@@ -1,0 +1,43 @@
+name: Publish WinGet
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+      tag:
+        required: true
+        type: string
+
+jobs:
+  publish-winget:
+    runs-on: windows-2025
+    env:
+      VERSION: ${{ inputs.version }}
+      TAG: ${{ inputs.tag }}
+      WINGET_CREATE_GITHUB_TOKEN: ${{ secrets.WINGET_CREATE_GITHUB_TOKEN }}
+    steps:
+      - name: Check publishing token
+        shell: pwsh
+        run: |
+          if (-not $env:WINGET_CREATE_GITHUB_TOKEN) {
+            throw "WinGet publication requires WINGET_CREATE_GITHUB_TOKEN"
+          }
+
+      - name: Install wingetcreate
+        shell: pwsh
+        run: Invoke-WebRequest https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
+
+      - name: Submit updated manifest
+        shell: pwsh
+        run: |
+          $tag = $env:TAG
+          $version = $env:VERSION
+          $url = "https://github.com/jag-k/clipboard-transformer/releases/download/$tag/clipboard-transformer-$version-x86_64.msi"
+
+          .\wingetcreate.exe update JagK.ClipboardTransformer `
+            -u $url `
+            -v $version `
+            -t $env:WINGET_CREATE_GITHUB_TOKEN `
+            --submit
