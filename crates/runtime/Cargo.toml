@@ -68,6 +68,7 @@ windows = { version = "0.61.3", optional = true, features = [
   "Foundation",
   "UI_Notifications",
   "Win32_Foundation",
+  "Win32_Storage_FileSystem",
   "Win32_System_Com",
   "Win32_System_Com_StructuredStorage",
   "Win32_System_Registry",

@@ -8,6 +8,21 @@ The format is based on [Keep a Changelog], and this project follows
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+### Changed
+
+- **Windows/Installer:** Make the local `just install-app-windows` helper use
+  the same silent MSI flags and verbose installer logging as the verification
+  script.
+
+### Fixed
+
+- **Windows/Runtime:** Avoid a heap-corruption crash while refreshing portable
+  toast shortcut metadata by letting `PROPVARIANT` values clean themselves up
+  exactly once.
+- **Windows/Scoop:** Reuse and enrich an existing Start Menu shortcut for the
+  current executable, including Scoop-created shortcuts, and remove the old
+  app-owned fallback shortcut to avoid duplicate Start Menu entries.
+
 ## [0.1.1] - 2026-07-28
 
 ### Added

@@ -538,7 +538,8 @@ install-app-windows: package-windows-msi
     $msi = Get-ChildItem "target/packager/*.msi" | Sort-Object LastWriteTime -Descending | Select-Object -First 1; \
     if (-not $msi) { throw "cargo-packager did not produce an MSI" }; \
     Get-Process -Name "Clipboard Transformer", "clipboard-transformer", "clipboard-transformer-app" -ErrorAction SilentlyContinue | Stop-Process -Force; \
-    $arguments = @("/i", ('"{0}"' -f $msi.FullName)); \
+    $log = "target/msi-install.log"; \
+    $arguments = @("/i", ('"{0}"' -f $msi.FullName), "/qn", "/norestart", "/l*v", ('"{0}"' -f $log)); \
     $installer = Start-Process "msiexec.exe" -Verb RunAs -ArgumentList $arguments -Wait -PassThru; \
-    if ($installer.ExitCode -notin @(0, 3010)) { throw "msiexec failed with exit code $($installer.ExitCode)" }; \
+    if ($installer.ExitCode -notin @(0, 3010)) { throw "msiexec failed with exit code $($installer.ExitCode); see $log" }; \
     Write-Output "C:\Program Files\Clipboard Transformer"

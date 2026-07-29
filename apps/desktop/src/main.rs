@@ -21,6 +21,9 @@ fn main() {
 }
 
 fn run_desktop() -> anyhow::Result<()> {
+    if let Ok(paths) = ct_runtime::config::ConfigPaths::resolve() {
+        ct_runtime::logging::init(paths.state_dir.join("clipboard-transformer.log"));
+    }
     let _activation = ct_runtime::platform::register_host_activation()?;
     desktop::run()
 }
