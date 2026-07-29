@@ -317,7 +317,7 @@ jobs:
           args=(
             "${{ needs.metadata.outputs.tag }}"
             --target "${GITHUB_SHA}"
-            --title "Clipboard Transformer ${{ needs.metadata.outputs.version }}"
+            --title "${{ needs.metadata.outputs.version }}"
             --notes-file release-notes/release-notes.md
           )
           if [[ "${{ needs.metadata.outputs.prerelease }}" == "true" ]]; then

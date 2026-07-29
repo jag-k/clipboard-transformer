@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog], and this project follows
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+### Changed
+
+- **Release:** Use the version number by itself as the GitHub Release title.
+
 ## [0.1.2] - 2026-07-29
 
 ### Changed
