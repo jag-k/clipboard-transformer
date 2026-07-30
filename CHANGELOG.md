@@ -29,6 +29,9 @@ The format is based on [Keep a Changelog], and this project follows
   clipboard contention retries, and native platform messages. This keeps the
   shared `AppCommand` ordering surface while avoiding unrelated clipboard and
   configuration probes.
+- **Runtime/Imports:** Refresh URL imports with HTTP validators, preserve
+  byte-identical cache files, and skip full config parsing and rule compilation
+  when every remote source is unchanged.
 - **Tray/macOS:** Preserve native menu objects across opens, update only changed
   fields and children, rebuild command tags atomically, and cache the bounded
   set of application-owned SF Symbols. Relative timestamps are still computed

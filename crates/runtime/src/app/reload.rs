@@ -95,6 +95,7 @@ pub struct ConfigReloader {
     watcher: RecommendedWatcher,
     events: Receiver<notify::Result<Event>>,
     watched_sources: BTreeSet<PathBuf>,
+    remote_imports: BTreeMap<String, PathBuf>,
     watched_dirs: BTreeSet<PathBuf>,
     load_options: ConfigLoadOptions,
     reload_request_path: Option<PathBuf>,
@@ -121,6 +122,14 @@ pub struct ConfigReloader {
 pub struct ConfigReloaderHost {
     pub plugins_dir: Option<PathBuf>,
     pub wake: Option<Arc<dyn Fn() + Send + Sync>>,
+}
+
+pub struct ConfigReloaderState {
+    pub watched_sources: BTreeSet<PathBuf>,
+    pub remote_imports: BTreeMap<String, PathBuf>,
+    pub import_refresh_interval: u64,
+    pub document_fingerprint: [u8; 32],
+    pub load_metadata_fingerprint: [u8; 32],
 }
 
 #[derive(Clone)]
@@ -153,13 +162,17 @@ pub enum ReloadOutcome {
 impl ConfigReloader {
     pub fn new(
         config_path: impl Into<PathBuf>,
-        watched_sources: BTreeSet<PathBuf>,
-        import_refresh_interval: u64,
-        last_document_fingerprint: [u8; 32],
-        last_load_metadata_fingerprint: [u8; 32],
+        state: ConfigReloaderState,
         load_options: ConfigLoadOptions,
         host: ConfigReloaderHost,
     ) -> Result<Self> {
+        let ConfigReloaderState {
+            watched_sources,
+            remote_imports,
+            import_refresh_interval,
+            document_fingerprint: last_document_fingerprint,
+            load_metadata_fingerprint: last_load_metadata_fingerprint,
+        } = state;
         let ConfigReloaderHost { plugins_dir, wake } = host;
         let config_path = config_path.into();
         let dotenv_path = crate::platform::environment::dotenv_path(&config_path);
@@ -242,6 +255,7 @@ impl ConfigReloader {
             watcher,
             events,
             watched_sources,
+            remote_imports,
             watched_dirs,
             load_options,
             reload_request_path,
@@ -302,7 +316,15 @@ impl ConfigReloader {
 
         let Some(pending_since) = self.pending_since else {
             if self.url_refresh_due() {
-                return self.reload_now(false);
+                self.last_url_check = Instant::now();
+                match crate::config::refresh_remote_imports(&self.remote_imports) {
+                    Ok(false) => {
+                        self.last_error = None;
+                        logging::event("URL imports checked; no changes found");
+                        return Ok(Some(ReloadOutcome::Unchanged));
+                    }
+                    Ok(true) | Err(_) => return self.reload_now(false),
+                }
             }
             return Ok(None);
         };
@@ -342,7 +364,9 @@ impl ConfigReloader {
             .pending_since
             .and_then(|pending| pending.checked_add(RELOAD_DEBOUNCE));
         let interval = Duration::from_secs(self.import_refresh_interval);
-        let url_refresh = (!interval.is_zero() && self.load_options.refresh_url_imports)
+        let url_refresh = (!self.remote_imports.is_empty()
+            && !interval.is_zero()
+            && self.load_options.refresh_url_imports)
             .then(|| self.last_url_check.checked_add(interval))
             .flatten();
         let request_watchdog = (self.reload_request_path.is_some() && !self.reload_request_watched)
@@ -498,6 +522,7 @@ impl ConfigReloader {
         let rule_count = engine.rule_count();
         self.replace_watches(&loaded.sources);
         self.retry_plugins_watch();
+        self.remote_imports = loaded.remote_imports.clone();
         self.import_refresh_interval = loaded.document.config.import_refresh_interval;
         self.last_document_fingerprint = document_fingerprint;
         self.last_source_contents_fingerprint =
@@ -538,7 +563,8 @@ impl ConfigReloader {
 
     fn url_refresh_due(&self) -> bool {
         let interval = Duration::from_secs(self.import_refresh_interval);
-        !interval.is_zero()
+        !self.remote_imports.is_empty()
+            && !interval.is_zero()
             && self.load_options.refresh_url_imports
             && self.last_url_check.elapsed() >= interval
     }
@@ -711,8 +737,10 @@ fn normalize_path(path: &Path) -> PathBuf {
 mod tests {
     use super::*;
     use ct_core::RawRule;
+    use std::net::TcpListener;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
+    use std::thread;
 
     #[test]
     fn config_fingerprint_is_stable_and_tracks_effective_rule_changes() {
@@ -858,10 +886,17 @@ mod tests {
         let callback_count = Arc::clone(&wake_count);
         let mut reloader = ConfigReloader::new(
             config_path.clone(),
-            loaded.sources,
-            0,
-            config_fingerprint(&loaded.document).unwrap(),
-            load_metadata_fingerprint(&loaded.warnings, &loaded.rule_sources).unwrap(),
+            ConfigReloaderState {
+                watched_sources: loaded.sources,
+                remote_imports: loaded.remote_imports,
+                import_refresh_interval: 0,
+                document_fingerprint: config_fingerprint(&loaded.document).unwrap(),
+                load_metadata_fingerprint: load_metadata_fingerprint(
+                    &loaded.warnings,
+                    &loaded.rule_sources,
+                )
+                .unwrap(),
+            },
             options,
             ConfigReloaderHost {
                 plugins_dir: None,
@@ -918,5 +953,68 @@ mod tests {
                 .add_path(relevant);
             assert!(watch_event_affects_targets(&Ok(event), &targets));
         }
+    }
+
+    #[test]
+    fn unchanged_url_refresh_skips_full_config_reload() {
+        let body = b"rules:\n  - id: imported\n    from: cat\n    to: dog\n";
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = thread::spawn(move || {
+            for _ in 0..2 {
+                let (mut stream, _) = listener.accept().unwrap();
+                let mut request = [0; 1024];
+                let _ = stream.read(&mut request).unwrap();
+                write!(
+                    stream,
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nETag: \"rules-v1\"\r\nConnection: close\r\n\r\n",
+                    body.len()
+                )
+                .unwrap();
+                stream.write_all(body).unwrap();
+            }
+        });
+        let temp = tempfile::tempdir().unwrap();
+        let state_dir = temp.path().join("state");
+        let config_path = temp.path().join("config.yaml");
+        fs::write(
+            &config_path,
+            format!(
+                "config:\n  import_refresh_interval: 1\nrules:\n  - import: http://{address}/rules.yaml\n"
+            ),
+        )
+        .unwrap();
+        let options = ConfigLoadOptions {
+            state_dir: Some(state_dir),
+            refresh_url_imports: true,
+            known_rule_types: BTreeSet::new(),
+        };
+        let loaded = load_config_with_options(&config_path, options.clone()).unwrap();
+        let document_fingerprint = config_fingerprint(&loaded.document).unwrap();
+        let metadata_fingerprint =
+            load_metadata_fingerprint(&loaded.warnings, &loaded.rule_sources).unwrap();
+        let mut reloader = ConfigReloader::new(
+            config_path,
+            ConfigReloaderState {
+                watched_sources: loaded.sources,
+                remote_imports: loaded.remote_imports,
+                import_refresh_interval: 1,
+                document_fingerprint,
+                load_metadata_fingerprint: metadata_fingerprint,
+            },
+            options,
+            ConfigReloaderHost::default(),
+        )
+        .unwrap();
+        reloader.last_url_check = Instant::now() - Duration::from_secs(2);
+        // If the fast path accidentally invokes the full loader, this missing
+        // path makes the test fail instead of merely returning Unchanged.
+        reloader.config_path = temp.path().join("missing.yaml");
+
+        assert!(matches!(
+            reloader.poll().unwrap(),
+            Some(ReloadOutcome::Unchanged)
+        ));
+        server.join().unwrap();
     }
 }

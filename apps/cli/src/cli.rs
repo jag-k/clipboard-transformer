@@ -552,6 +552,7 @@ fn load_rule_catalog_config(inputs: &ConfigInputs) -> Result<LoadedCliConfig> {
                 loaded: ct_runtime::config::LoadedConfig {
                     document: ct_runtime::config::ConfigDocument::default(),
                     sources: Default::default(),
+                    remote_imports: Default::default(),
                     rule_sources: Default::default(),
                     warnings: Vec::new(),
                 },

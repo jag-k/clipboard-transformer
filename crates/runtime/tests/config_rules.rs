@@ -719,6 +719,10 @@ fn yaml_url_import_uses_cached_file_when_downloads_are_disabled() {
 
     assert_eq!(loaded.document.rules[0].id, "cat-to-dog");
     assert!(loaded.sources.contains(&cache_path.canonicalize().unwrap()));
+    assert_eq!(
+        loaded.remote_imports.get(url),
+        Some(&cache_path.canonicalize().unwrap())
+    );
 }
 
 #[test]

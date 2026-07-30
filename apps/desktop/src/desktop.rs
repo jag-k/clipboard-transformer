@@ -209,14 +209,18 @@ pub fn run() -> Result<()> {
     let rule_sources = std::mem::take(&mut loaded.rule_sources);
     let source_count = loaded.sources.len();
     let watched_sources = std::mem::take(&mut loaded.sources);
+    let remote_imports = std::mem::take(&mut loaded.remote_imports);
     let import_refresh_interval = loaded.document.config.import_refresh_interval;
     let agent_document = loaded.document;
     let mut reloader = ct_runtime::app::reload::ConfigReloader::new(
         config_path.clone(),
-        watched_sources,
-        import_refresh_interval,
-        document_fingerprint,
-        load_metadata_fingerprint,
+        ct_runtime::app::reload::ConfigReloaderState {
+            watched_sources,
+            remote_imports,
+            import_refresh_interval,
+            document_fingerprint,
+            load_metadata_fingerprint,
+        },
         load_options,
         ct_runtime::app::reload::ConfigReloaderHost {
             plugins_dir: Some(paths.plugins_dir.clone()),

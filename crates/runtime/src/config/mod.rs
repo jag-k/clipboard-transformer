@@ -5,6 +5,7 @@ mod schema;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fmt;
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
@@ -38,6 +39,7 @@ pub struct RuleSource {
 pub struct LoadedConfig {
     pub document: ConfigDocument,
     pub sources: BTreeSet<PathBuf>,
+    pub remote_imports: BTreeMap<String, PathBuf>,
     pub rule_sources: BTreeMap<String, RuleSource>,
     pub warnings: Vec<ConfigWarning>,
 }
@@ -203,6 +205,7 @@ pub fn load_inline_config(text: &str, known_rule_types: BTreeSet<String>) -> Res
     Ok(finish_loaded_config(
         document,
         BTreeSet::new(),
+        BTreeMap::new(),
         Vec::new(),
         &known_rule_types,
         None,
@@ -278,6 +281,7 @@ pub fn validate_loaded_config(
 fn finish_loaded_config(
     mut document: ConfigDocument,
     sources: BTreeSet<PathBuf>,
+    remote_imports: BTreeMap<String, PathBuf>,
     mut warnings: Vec<ConfigWarning>,
     known_rule_types: &BTreeSet<String>,
     shell_sources: Option<ShellSourcePolicy<'_>>,
@@ -306,6 +310,7 @@ fn finish_loaded_config(
     LoadedConfig {
         document,
         sources,
+        remote_imports,
         rule_sources,
         warnings,
     }
@@ -574,6 +579,7 @@ fn load_yaml(path: &Path, options: &ConfigLoadOptions) -> Result<LoadedConfig> {
     Ok(finish_loaded_config(
         document,
         sources,
+        context.remote_imports,
         context.warnings,
         &options.known_rule_types,
         Some((&root, &remote_sources, &authorized_remote_shell_rules)),
@@ -586,6 +592,7 @@ struct LoadContext {
     loaded: BTreeSet<PathBuf>,
     warnings: Vec<ConfigWarning>,
     remote_sources: BTreeSet<PathBuf>,
+    remote_imports: BTreeMap<String, PathBuf>,
     authorized_remote_shell_rules: BTreeSet<(PathBuf, String)>,
     shell_policy: ShellConfig,
 }
@@ -600,6 +607,7 @@ impl LoadContext {
             loaded: BTreeSet::new(),
             warnings: Vec::new(),
             remote_sources: BTreeSet::new(),
+            remote_imports: BTreeMap::new(),
             authorized_remote_shell_rules: BTreeSet::new(),
             shell_policy: ShellConfig::default(),
         }
@@ -985,7 +993,7 @@ fn require_import_file(path: PathBuf, import_path: &str) -> Result<PathBuf> {
     normalize_path(&path)
 }
 
-fn resolve_url_import(url: Url, context: &LoadContext) -> Result<PathBuf> {
+fn resolve_url_import(url: Url, context: &mut LoadContext) -> Result<PathBuf> {
     let cache_dir = context
         .options
         .state_dir
@@ -997,7 +1005,7 @@ fn resolve_url_import(url: Url, context: &LoadContext) -> Result<PathBuf> {
     if context.options.refresh_url_imports
         && should_refresh_url_import(&cache_path, context.import_refresh_interval)
     {
-        if let Err(error) = download_url_import(&url, &cache_path) {
+        if let Err(error) = refresh_url_import(&url, &cache_path) {
             if cache_path.exists() {
                 crate::logging::event(format!(
                     "URL import refresh failed for {}; using cached copy: {error:#}",
@@ -1014,7 +1022,11 @@ fn resolve_url_import(url: Url, context: &LoadContext) -> Result<PathBuf> {
             url.as_str()
         );
     }
-    normalize_path(&cache_path)
+    let cache_path = normalize_path(&cache_path)?;
+    context
+        .remote_imports
+        .insert(url.as_str().to_owned(), cache_path.clone());
+    Ok(cache_path)
 }
 
 fn normalize_import_url(url: Url) -> Url {
@@ -1165,7 +1177,11 @@ fn should_refresh_url_import(cache_path: &Path, interval: Duration) -> bool {
     if interval.is_zero() {
         return false;
     }
-    let Ok(metadata) = fs::metadata(cache_path) else {
+    if !cache_path.exists() {
+        return true;
+    }
+    let refresh_marker = url_cache_metadata_path(cache_path);
+    let Ok(metadata) = fs::metadata(&refresh_marker).or_else(|_| fs::metadata(cache_path)) else {
         return true;
     };
     let Ok(modified) = metadata.modified() else {
@@ -1176,20 +1192,122 @@ fn should_refresh_url_import(cache_path: &Path, interval: Duration) -> bool {
         .map_or(true, |age| age >= interval)
 }
 
-fn download_url_import(url: &Url, cache_path: &Path) -> Result<()> {
+#[derive(Debug, Default, Deserialize, Serialize)]
+struct UrlCacheMetadata {
+    etag: Option<String>,
+    last_modified: Option<String>,
+}
+
+#[cfg(feature = "desktop")]
+pub(crate) fn refresh_remote_imports(remote_imports: &BTreeMap<String, PathBuf>) -> Result<bool> {
+    let mut changed = false;
+    for (url, cache_path) in remote_imports {
+        let url = Url::parse(url).with_context(|| format!("parse cached import URL {url}"))?;
+        match refresh_url_import(&url, cache_path) {
+            Ok(import_changed) => changed |= import_changed,
+            Err(error) if cache_path.exists() => crate::logging::event(format!(
+                "URL import refresh failed for {}; using cached copy: {error:#}",
+                url.as_str()
+            )),
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(changed)
+}
+
+fn refresh_url_import(url: &Url, cache_path: &Path) -> Result<bool> {
     let tmp_path = cache_path.with_extension("tmp");
-    crate::platform::download::download_to_file(
+    let metadata_path = url_cache_metadata_path(cache_path);
+    let metadata = if cache_path.exists() {
+        fs::read(&metadata_path)
+            .ok()
+            .and_then(|bytes| serde_json::from_slice::<UrlCacheMetadata>(&bytes).ok())
+            .unwrap_or_default()
+    } else {
+        UrlCacheMetadata::default()
+    };
+    let validators = crate::platform::download::HttpValidators {
+        etag: metadata.etag,
+        last_modified: metadata.last_modified,
+    };
+    let outcome = crate::platform::download::download_to_file_conditional(
         url.as_str(),
         &tmp_path,
         Duration::from_secs(30),
         None,
+        Some(&validators),
     )
     .with_context(|| format!("download URL import {}", url.as_str()))?;
-    // Always replace the cache so its mtime records this refresh; otherwise
-    // an unchanged download would stay "stale" and re-download on every load.
-    fs::rename(&tmp_path, cache_path)
-        .with_context(|| format!("write URL import cache {}", cache_path.display()))?;
-    Ok(())
+    let (changed, validators) = match outcome {
+        crate::platform::download::DownloadOutcome::NotModified(validators) => {
+            if !cache_path.exists() {
+                bail!(
+                    "URL import {} returned not modified without a cached file",
+                    url.as_str()
+                );
+            }
+            (false, validators)
+        }
+        crate::platform::download::DownloadOutcome::Updated(validators) => {
+            if files_have_same_contents(&tmp_path, cache_path)? {
+                fs::remove_file(&tmp_path)
+                    .with_context(|| format!("remove unchanged {}", tmp_path.display()))?;
+                (false, validators)
+            } else {
+                fs::rename(&tmp_path, cache_path)
+                    .with_context(|| format!("write URL import cache {}", cache_path.display()))?;
+                (true, validators)
+            }
+        }
+    };
+    let metadata = UrlCacheMetadata {
+        etag: validators.etag,
+        last_modified: validators.last_modified,
+    };
+    if let Err(error) = write_url_cache_metadata(&metadata_path, &metadata) {
+        crate::logging::event(format!(
+            "URL import refresh metadata unavailable for {}: {error:#}",
+            url.as_str()
+        ));
+    }
+    Ok(changed)
+}
+
+fn files_have_same_contents(left: &Path, right: &Path) -> Result<bool> {
+    let Ok(right_metadata) = fs::metadata(right) else {
+        return Ok(false);
+    };
+    if fs::metadata(left)?.len() != right_metadata.len() {
+        return Ok(false);
+    }
+    let mut left = fs::File::open(left)?;
+    let mut right = fs::File::open(right)?;
+    let mut left_buffer = [0_u8; 16 * 1024];
+    let mut right_buffer = [0_u8; 16 * 1024];
+    loop {
+        let left_read = left.read(&mut left_buffer)?;
+        let right_read = right.read(&mut right_buffer)?;
+        if left_read != right_read || left_buffer[..left_read] != right_buffer[..right_read] {
+            return Ok(false);
+        }
+        if left_read == 0 {
+            return Ok(true);
+        }
+    }
+}
+
+fn url_cache_metadata_path(cache_path: &Path) -> PathBuf {
+    let mut name = cache_path.as_os_str().to_os_string();
+    name.push(".http.json");
+    PathBuf::from(name)
+}
+
+fn write_url_cache_metadata(path: &Path, metadata: &UrlCacheMetadata) -> Result<()> {
+    let bytes = serde_json::to_vec(metadata).context("serialize URL import metadata")?;
+    // This is only an HTTP optimization hint, not source-of-truth config.
+    // A partial/corrupt write is ignored on the next refresh and is safer than
+    // relying on platform-specific rename-over-existing behavior.
+    fs::write(path, bytes).with_context(|| format!("write {}", path.display()))
 }
 
 fn url_cache_file_name(url: &Url) -> String {
@@ -1217,6 +1335,7 @@ fn load_toml(path: &Path, options: &ConfigLoadOptions) -> Result<LoadedConfig> {
     Ok(finish_loaded_config(
         document,
         sources,
+        context.remote_imports,
         context.warnings,
         &options.known_rule_types,
         Some((&root, &remote_sources, &authorized_remote_shell_rules)),
@@ -1464,6 +1583,10 @@ fn normalize_path(path: &Path) -> Result<PathBuf> {
 
 #[cfg(test)]
 mod tests {
+    use std::io::{Read as _, Write as _};
+    use std::net::TcpListener;
+    use std::thread;
+
     use super::*;
 
     fn assert_normalized_import_url(input: &str, expected: &str) {
@@ -1517,5 +1640,42 @@ mod tests {
             "https://codeberg.org/owner/repo/src/branch/main/rules.yaml",
             "https://codeberg.org/owner/repo/raw/branch/main/rules.yaml",
         );
+    }
+
+    #[test]
+    fn unchanged_url_import_keeps_cache_contents_and_records_validators() {
+        let body = b"rules:\n  - id: unchanged\n    from: cat\n    to: dog\n";
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = [0; 1024];
+            let _ = stream.read(&mut request).unwrap();
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nETag: \"rules-v1\"\r\nLast-Modified: Wed, 29 Jul 2026 12:00:00 GMT\r\nConnection: close\r\n\r\n",
+                body.len()
+            )
+            .unwrap();
+            stream.write_all(body).unwrap();
+        });
+        let directory = tempfile::tempdir().unwrap();
+        let cache_path = directory.path().join("rules.yaml");
+        fs::write(&cache_path, body).unwrap();
+        let url = Url::parse(&format!("http://{address}/rules.yaml")).unwrap();
+
+        assert!(!refresh_url_import(&url, &cache_path).unwrap());
+
+        assert_eq!(fs::read(&cache_path).unwrap(), body);
+        assert!(!cache_path.with_extension("tmp").exists());
+        let metadata: UrlCacheMetadata =
+            serde_json::from_slice(&fs::read(url_cache_metadata_path(&cache_path)).unwrap())
+                .unwrap();
+        assert_eq!(metadata.etag.as_deref(), Some("\"rules-v1\""));
+        assert_eq!(
+            metadata.last_modified.as_deref(),
+            Some("Wed, 29 Jul 2026 12:00:00 GMT")
+        );
+        server.join().unwrap();
     }
 }
