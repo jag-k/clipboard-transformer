@@ -45,6 +45,9 @@ The format is based on [Keep a Changelog], and this project follows
 
 ### Fixed
 
+- **Windows/Desktop:** Embed the Clipboard Transformer product name in the GUI
+  executable so Task Manager does not show the internal `ct-desktop` package
+  name.
 - **Desktop/Runtime:** Prevent a wakeup sent between the final application drain
   and the native wait from leaving commands, configuration events, or completed
   transformations pending indefinitely.

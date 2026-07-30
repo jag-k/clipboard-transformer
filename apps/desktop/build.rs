@@ -17,7 +17,15 @@ fn main() {
         return;
     }
 
+    // The portable/MSI pipeline renames the Cargo-produced executable after
+    // linking. Set the PE version-resource strings explicitly so Windows UI
+    // (including Task Manager) uses the product name instead of this package's
+    // internal Cargo name, `ct-desktop`.
     winresource::WindowsResource::new()
+        .set("ProductName", "Clipboard Transformer")
+        .set("FileDescription", "Clipboard Transformer")
+        .set("InternalName", "Clipboard Transformer")
+        .set("OriginalFilename", "Clipboard Transformer.exe")
         .set_icon(icon.to_str().expect("Windows icon path is UTF-8"))
         .compile()
         .expect("embed Windows application icon");
