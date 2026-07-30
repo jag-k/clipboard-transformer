@@ -1006,6 +1006,21 @@ mod tests {
             ConfigReloaderHost::default(),
         )
         .unwrap();
+        // This test exercises the URL-refresh fast path. The watcher/debounce
+        // contract is covered independently above, so detach its asynchronous
+        // sources and discard any startup notifications before polling.
+        for directory in reloader.watched_dirs.clone() {
+            reloader.watcher.unwatch(&directory).unwrap();
+        }
+        if reloader.reload_request_watched {
+            let directory = reloader
+                .reload_request_path
+                .as_deref()
+                .and_then(Path::parent)
+                .unwrap();
+            reloader.watcher.unwatch(directory).unwrap();
+        }
+        while reloader.events.try_recv().is_ok() {}
         reloader.last_url_check = Instant::now() - Duration::from_secs(2);
         // If the fast path accidentally invokes the full loader, this missing
         // path makes the test fail instead of merely returning Unchanged.
