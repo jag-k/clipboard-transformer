@@ -33,6 +33,9 @@ release notes rather than this file.
 
 ## Runtime and tooling
 
+- [ ] Add a configuration option to disable automatic config hot reload,
+  including filesystem watches and periodic import polling, while keeping
+  explicit manual reload available.
 - [ ] Audit CI and `Justfile` together. Prefer shared `just` recipes where CI
   currently duplicates Cargo invocations with misleading feature flags.
 - [ ] Diagnose the intermittent

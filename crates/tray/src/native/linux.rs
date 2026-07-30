@@ -38,7 +38,13 @@ impl ksni::Tray for LinuxTrayState {
 
     fn icon_pixmap(&self) -> Vec<ksni::Icon> {
         let pixels = crate::themed_icon(false);
-        let mut argb = pixels.rgba.to_vec();
+        pixels
+            .validate()
+            .expect("generated Linux tray icon payload is valid");
+        let mut argb = pixels
+            .rgba8()
+            .expect("Linux tray fallback icon uses RGBA8 pixels")
+            .to_vec();
         for pixel in argb.chunks_exact_mut(4) {
             pixel.rotate_right(1);
         }

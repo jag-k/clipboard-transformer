@@ -13,7 +13,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use log::{LevelFilter, Log, Metadata, Record};
+use log::{Level, LevelFilter, Log, Metadata, Record};
 
 static LOG_PATH: OnceLock<PathBuf> = OnceLock::new();
 static LOG_LOCK: Mutex<()> = Mutex::new(());
@@ -21,18 +21,21 @@ static MIRROR_STDERR: AtomicBool = AtomicBool::new(false);
 
 const MAX_LOG_BYTES: u64 = 5 * 1024 * 1024;
 const RETAINED_LOG_FILES: usize = 3;
+const FILE_LOG_LEVEL: LevelFilter = LevelFilter::Info;
 
 /// Writes only the message, with no level or target prefix, so records routed
 /// through `log` are byte-identical to the historical format.
 struct FileLogger;
 
 impl Log for FileLogger {
-    fn enabled(&self, _metadata: &Metadata) -> bool {
-        true
+    fn enabled(&self, metadata: &Metadata) -> bool {
+        metadata.level() <= Level::Info
     }
 
     fn log(&self, record: &Record) {
-        write_line(&record.args().to_string());
+        if self.enabled(record.metadata()) {
+            write_line(&record.args().to_string());
+        }
     }
 
     fn flush(&self) {}
@@ -44,7 +47,7 @@ fn install() {
     static INSTALLED: OnceLock<()> = OnceLock::new();
     INSTALLED.get_or_init(|| {
         if log::set_logger(&FileLogger).is_ok() {
-            log::set_max_level(LevelFilter::Trace);
+            log::set_max_level(FILE_LOG_LEVEL);
         }
     });
 }
@@ -130,7 +133,8 @@ fn rotated_log_path(path: &Path, index: usize) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
-    use super::{init, rotate_log_if_needed, rotated_log_path};
+    use super::{init, rotate_log_if_needed, rotated_log_path, FileLogger};
+    use log::{Level, Log, Metadata};
     use std::fs;
 
     /// The whole point of installing a `log::Log` implementation: a crate that
@@ -167,6 +171,25 @@ mod tests {
                 "bad timestamp in {line:?}"
             );
             assert!(!message.starts_with("INFO"), "level leaked into {line:?}");
+        }
+    }
+
+    #[test]
+    fn dependency_debug_and_trace_records_are_disabled() {
+        let logger = FileLogger;
+        for level in [Level::Error, Level::Warn, Level::Info] {
+            let metadata = Metadata::builder()
+                .level(level)
+                .target("dependency")
+                .build();
+            assert!(logger.enabled(&metadata));
+        }
+        for level in [Level::Debug, Level::Trace] {
+            let metadata = Metadata::builder()
+                .level(level)
+                .target("dependency")
+                .build();
+            assert!(!logger.enabled(&metadata));
         }
     }
 

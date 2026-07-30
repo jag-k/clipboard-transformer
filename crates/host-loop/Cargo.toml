@@ -20,4 +20,4 @@ objc2-app-kit = { version = "0.3", features = ["NSApplication", "NSEvent", "NSRe
 objc2-foundation = { version = "0.3", features = ["NSDate", "NSObjCRuntime", "NSRunLoop"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_DataExchange", "Win32_System_LibraryLoader", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }

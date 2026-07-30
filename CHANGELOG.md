@@ -8,9 +8,57 @@ The format is based on [Keep a Changelog], and this project follows
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+### Added
+
+- **Desktop/Runtime:** Add a clonable native wake handle, coalesced
+  application-defined wake reasons, neutral native event reporting, and
+  explicit runtime deadlines so the desktop can sleep until relevant work is
+  ready without moving application policy into the host loop.
+- **Tray/macOS:** Reconcile retained `NSMenuItem`, submenu, and SF Symbol
+  objects in place when the semantic menu model changes.
+
 ### Changed
 
 - **Release:** Use the version number by itself as the GitHub Release title.
+- **Desktop/Runtime:** Replace the unconditional all-source 200 ms desktop tick
+  with source-selective command, rule-result, configuration, and clipboard
+  processing. Keep a deadline-based clipboard compatibility poll only where a
+  backend or desktop session has no reliable native change notification.
+- **Desktop/Runtime:** Derive wakeups and deadlines from tray and notification
+  commands, completed rule jobs, filesystem events, remote-import refresh,
+  clipboard contention retries, and native platform messages. This keeps the
+  shared `AppCommand` ordering surface while avoiding unrelated clipboard and
+  configuration probes.
+- **Tray/macOS:** Preserve native menu objects across opens, update only changed
+  fields and children, rebuild command tags atomically, and cache the bounded
+  set of application-owned SF Symbols. Relative timestamps are still computed
+  from a fresh semantic model whenever the menu opens.
+- **Tray/Icons:** Describe generated tray pixels with an explicit format and
+  stride, use a validated @2x grayscale-plus-alpha template payload on macOS,
+  and retain RGBA payloads where Windows and Linux need color or theme
+  variants.
+- **Tray/Actions:** Add macOS SF Symbols for Undo and Edit rule and refine the
+  Copy config path and Quit action icons.
+
+### Fixed
+
+- **Desktop/Runtime:** Prevent a wakeup sent between the final application drain
+  and the native wait from leaving commands, configuration events, or completed
+  transformations pending indefinitely.
+- **Windows/Runtime:** Observe clipboard changes through the message-only Win32
+  listener, route native quit through the ordered application command channel,
+  and fall back to compatibility polling instead of failing startup when the
+  clipboard listener is unavailable.
+- **macOS/Runtime:** Stop calling `NSApplication::updateWindows()`
+  unconditionally and create tray UI only after the native application pump is
+  initialized.
+- **Desktop/Runtime:** Filter config-watch events before enqueueing or waking
+  the host, so log, history, state, and PID writes cannot create a
+  self-amplifying filesystem/logging loop. Keep dependency diagnostics at
+  `Info` unless verbose tracing is explicitly added later.
+- **macOS/Tray:** Use an explicit square, image-only status item and a stable
+  application-specific autosave name so AppKit can persist its position and
+  visibility independently.
 
 ## [0.1.2] - 2026-07-29
 

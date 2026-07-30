@@ -3,6 +3,7 @@ use std::fs;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver};
+use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
@@ -20,6 +21,7 @@ use ct_core::RuleEngine;
 use std::collections::BTreeMap;
 
 const RELOAD_DEBOUNCE: Duration = Duration::from_millis(250);
+const RELOAD_REQUEST_WATCHDOG: Duration = Duration::from_secs(5);
 const RELOAD_REQUEST_FILE: &str = "reload-request";
 
 fn serialized_fingerprint(value: &impl serde::Serialize) -> Result<[u8; 32]> {
@@ -96,6 +98,7 @@ pub struct ConfigReloader {
     watched_dirs: BTreeSet<PathBuf>,
     load_options: ConfigLoadOptions,
     reload_request_path: Option<PathBuf>,
+    reload_request_watched: bool,
     ignored_watch_dir: Option<PathBuf>,
     dotenv_path: PathBuf,
     plugins_dir: Option<PathBuf>,
@@ -107,9 +110,25 @@ pub struct ConfigReloader {
     last_plugin_modules: BTreeMap<PathBuf, u64>,
     last_environment_revision: u64,
     last_url_check: Instant,
+    last_reload_request_check: Instant,
     pending_since: Option<Instant>,
     pending_force_reload: bool,
     last_error: Option<String>,
+    watch_targets: Arc<RwLock<WatchTargets>>,
+}
+
+#[derive(Default)]
+pub struct ConfigReloaderHost {
+    pub plugins_dir: Option<PathBuf>,
+    pub wake: Option<Arc<dyn Fn() + Send + Sync>>,
+}
+
+#[derive(Clone)]
+struct WatchTargets {
+    sources: BTreeSet<PathBuf>,
+    dotenv_path: PathBuf,
+    plugins_dir: Option<PathBuf>,
+    reload_request_path: Option<PathBuf>,
 }
 
 #[derive(Debug)]
@@ -139,12 +158,37 @@ impl ConfigReloader {
         last_document_fingerprint: [u8; 32],
         last_load_metadata_fingerprint: [u8; 32],
         load_options: ConfigLoadOptions,
-        plugins_dir: Option<PathBuf>,
+        host: ConfigReloaderHost,
     ) -> Result<Self> {
+        let ConfigReloaderHost { plugins_dir, wake } = host;
+        let config_path = config_path.into();
+        let dotenv_path = crate::platform::environment::dotenv_path(&config_path);
+        let reload_request_path = load_options
+            .state_dir
+            .as_ref()
+            .map(|state_dir| state_dir.join(RELOAD_REQUEST_FILE));
+        let watch_targets = Arc::new(RwLock::new(WatchTargets {
+            sources: watched_sources.clone(),
+            dotenv_path: dotenv_path.clone(),
+            plugins_dir: plugins_dir.clone(),
+            reload_request_path: reload_request_path.clone(),
+        }));
         let (sender, events) = mpsc::channel();
+        let callback_targets = Arc::clone(&watch_targets);
         let mut watcher = RecommendedWatcher::new(
             move |event| {
-                let _ = sender.send(event);
+                let relevant = callback_targets
+                    .read()
+                    .map(|targets| watch_event_affects_targets(&event, &targets))
+                    .unwrap_or(true);
+                if !relevant {
+                    return;
+                }
+                if sender.send(event).is_ok() {
+                    if let Some(wake) = &wake {
+                        wake();
+                    }
+                }
             },
             Config::default(),
         )?;
@@ -155,6 +199,25 @@ impl ConfigReloader {
         let watched_dirs = source_dirs(&watched_sources, ignored_watch_dir.as_deref());
         for dir in &watched_dirs {
             watch_dir(&mut watcher, dir)?;
+        }
+        let mut reload_request_watched = false;
+        if let Some(reload_request_dir) = reload_request_path.as_deref().and_then(Path::parent) {
+            if watched_dirs.contains(reload_request_dir) {
+                reload_request_watched = true;
+            } else {
+                match watch_dir(&mut watcher, reload_request_dir) {
+                    Ok(()) => {
+                        reload_request_watched = true;
+                        logging::event(format!(
+                            "config reloader watching manual request dir {}",
+                            reload_request_dir.display()
+                        ));
+                    }
+                    Err(error) => logging::event(format!(
+                        "manual reload request watch unavailable: {error:#}"
+                    )),
+                }
+            }
         }
         let mut plugins_dir_watched = false;
         let mut last_plugin_modules = BTreeMap::new();
@@ -172,12 +235,6 @@ impl ConfigReloader {
             watched_sources.len(),
             watched_dirs.len()
         ));
-        let reload_request_path = load_options
-            .state_dir
-            .as_ref()
-            .map(|state_dir| state_dir.join(RELOAD_REQUEST_FILE));
-        let config_path = config_path.into();
-        let dotenv_path = crate::platform::environment::dotenv_path(&config_path);
         let last_source_contents_fingerprint =
             source_contents_fingerprint(&watched_sources, &dotenv_path)?;
         Ok(Self {
@@ -188,6 +245,7 @@ impl ConfigReloader {
             watched_dirs,
             load_options,
             reload_request_path,
+            reload_request_watched,
             ignored_watch_dir,
             dotenv_path,
             plugins_dir,
@@ -199,13 +257,16 @@ impl ConfigReloader {
             last_plugin_modules,
             last_environment_revision: crate::platform::environment::revision(),
             last_url_check: Instant::now(),
+            last_reload_request_check: Instant::now(),
             pending_since: None,
             pending_force_reload: false,
             last_error: None,
+            watch_targets,
         })
     }
 
     pub fn poll(&mut self) -> Result<Option<ReloadOutcome>> {
+        self.last_reload_request_check = Instant::now();
         let mut saw_event = false;
         let mut force_reload = false;
         for event in self.events.try_iter() {
@@ -272,6 +333,28 @@ impl ConfigReloader {
         self.pending_since = None;
         self.pending_force_reload = false;
         self.reload_now(true)
+    }
+
+    /// Earliest time at which polling this reloader can produce new work
+    /// without a filesystem notification.
+    pub fn next_deadline(&self) -> Option<Instant> {
+        let debounce = self
+            .pending_since
+            .and_then(|pending| pending.checked_add(RELOAD_DEBOUNCE));
+        let interval = Duration::from_secs(self.import_refresh_interval);
+        let url_refresh = (!interval.is_zero() && self.load_options.refresh_url_imports)
+            .then(|| self.last_url_check.checked_add(interval))
+            .flatten();
+        let request_watchdog = (self.reload_request_path.is_some() && !self.reload_request_watched)
+            .then(|| {
+                self.last_reload_request_check
+                    .checked_add(RELOAD_REQUEST_WATCHDOG)
+            })
+            .flatten();
+        [debounce, url_refresh, request_watchdog]
+            .into_iter()
+            .flatten()
+            .min()
     }
 
     fn reload_now(&mut self, requested: bool) -> Result<Option<ReloadOutcome>> {
@@ -463,6 +546,9 @@ impl ConfigReloader {
     // A directory that fails to watch (e.g. it was just deleted) degrades hot
     // reload for that directory instead of taking the whole app down.
     fn replace_watches(&mut self, next_sources: &BTreeSet<PathBuf>) {
+        if let Ok(mut targets) = self.watch_targets.write() {
+            targets.sources = next_sources.clone();
+        }
         let next_dirs = source_dirs(next_sources, self.ignored_watch_dir.as_deref());
         for dir in self.watched_dirs.difference(&next_dirs) {
             if let Err(error) = self.watcher.unwatch(dir) {
@@ -494,20 +580,15 @@ impl ConfigReloader {
             || event.paths.iter().any(|path| {
                 path_affects_config(path, &self.watched_sources, &self.dotenv_path)
                     || self.event_affects_plugins(path)
+                    || self
+                        .reload_request_path
+                        .as_deref()
+                        .is_some_and(|request| paths_equivalent(path, request))
             })
     }
 
     fn event_affects_plugins(&self, path: &Path) -> bool {
-        let Some(plugins_dir) = &self.plugins_dir else {
-            return false;
-        };
-        if paths_equivalent(path, plugins_dir) {
-            return true;
-        }
-        path.extension().and_then(|ext| ext.to_str()) == Some("wasm")
-            && path
-                .parent()
-                .is_some_and(|parent| paths_equivalent(parent, plugins_dir))
+        path_affects_plugins(path, self.plugins_dir.as_deref())
     }
 
     fn consume_reload_request(&self) -> bool {
@@ -532,6 +613,38 @@ impl ConfigReloader {
             }
         }
     }
+}
+
+fn watch_event_affects_targets(event: &notify::Result<Event>, targets: &WatchTargets) -> bool {
+    match event {
+        Ok(event) => event_affects_targets(event, targets),
+        Err(_) => true,
+    }
+}
+
+fn event_affects_targets(event: &Event, targets: &WatchTargets) -> bool {
+    event.paths.is_empty()
+        || event.paths.iter().any(|path| {
+            path_affects_config(path, &targets.sources, &targets.dotenv_path)
+                || path_affects_plugins(path, targets.plugins_dir.as_deref())
+                || targets
+                    .reload_request_path
+                    .as_deref()
+                    .is_some_and(|request| paths_equivalent(path, request))
+        })
+}
+
+fn path_affects_plugins(path: &Path, plugins_dir: Option<&Path>) -> bool {
+    let Some(plugins_dir) = plugins_dir else {
+        return false;
+    };
+    if paths_equivalent(path, plugins_dir) {
+        return true;
+    }
+    path.extension().and_then(|ext| ext.to_str()) == Some("wasm")
+        && path
+            .parent()
+            .is_some_and(|parent| paths_equivalent(parent, plugins_dir))
 }
 
 fn source_dirs(sources: &BTreeSet<PathBuf>, ignored_dir: Option<&Path>) -> BTreeSet<PathBuf> {
@@ -598,6 +711,8 @@ fn normalize_path(path: &Path) -> PathBuf {
 mod tests {
     use super::*;
     use ct_core::RawRule;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
 
     #[test]
     fn config_fingerprint_is_stable_and_tracks_effective_rule_changes() {
@@ -721,5 +836,87 @@ mod tests {
         fs::remove_file(&real_config).unwrap();
 
         assert!(paths_equivalent(&real_config, &linked_config));
+    }
+
+    #[test]
+    fn filesystem_events_wake_the_host_and_create_a_debounce_deadline() {
+        let temp = tempfile::tempdir().unwrap();
+        let config_path = temp.path().join("config.yaml");
+        fs::write(
+            &config_path,
+            "config:\n  import_refresh_interval: 0\nrules: []\n",
+        )
+        .unwrap();
+        let options = ConfigLoadOptions {
+            state_dir: Some(temp.path().join("state")),
+            refresh_url_imports: true,
+            known_rule_types: BTreeSet::new(),
+        };
+        fs::create_dir_all(options.state_dir.as_ref().unwrap()).unwrap();
+        let loaded = load_config_with_options(&config_path, options.clone()).unwrap();
+        let wake_count = Arc::new(AtomicUsize::new(0));
+        let callback_count = Arc::clone(&wake_count);
+        let mut reloader = ConfigReloader::new(
+            config_path.clone(),
+            loaded.sources,
+            0,
+            config_fingerprint(&loaded.document).unwrap(),
+            load_metadata_fingerprint(&loaded.warnings, &loaded.rule_sources).unwrap(),
+            options,
+            ConfigReloaderHost {
+                plugins_dir: None,
+                wake: Some(Arc::new(move || {
+                    callback_count.fetch_add(1, Ordering::Release);
+                })),
+            },
+        )
+        .unwrap();
+
+        fs::write(
+            &config_path,
+            "config:\n  import_refresh_interval: 0\n  persist_last_clipboard: true\nrules: []\n",
+        )
+        .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while wake_count.load(Ordering::Acquire) == 0 {
+            assert!(Instant::now() < deadline, "watcher did not wake the host");
+            std::thread::yield_now();
+        }
+
+        assert!(reloader.poll().unwrap().is_none());
+        let debounce = reloader.next_deadline().expect("debounce deadline");
+        assert!(debounce > Instant::now());
+        assert!(debounce <= Instant::now() + RELOAD_DEBOUNCE);
+    }
+
+    #[test]
+    fn state_outputs_do_not_enter_the_reload_event_queue() {
+        let state_dir = PathBuf::from("/tmp/clipboard-transformer-state");
+        let config = PathBuf::from("/tmp/clipboard-transformer-config/config.yaml");
+        let dotenv = config.with_file_name(".env");
+        let reload_request = state_dir.join(RELOAD_REQUEST_FILE);
+        let targets = WatchTargets {
+            sources: BTreeSet::from([config.clone()]),
+            dotenv_path: dotenv.clone(),
+            plugins_dir: Some(config.parent().unwrap().join("plugins")),
+            reload_request_path: Some(reload_request.clone()),
+        };
+
+        for unrelated in [
+            state_dir.join("clipboard-transformer.log"),
+            state_dir.join("history.cbor"),
+            state_dir.join("state.json"),
+            state_dir.join("clipboard-transformer.pid"),
+        ] {
+            let event = Event::new(notify::EventKind::Modify(notify::event::ModifyKind::Any))
+                .add_path(unrelated);
+            assert!(!watch_event_affects_targets(&Ok(event), &targets));
+        }
+
+        for relevant in [config, dotenv, reload_request] {
+            let event = Event::new(notify::EventKind::Modify(notify::event::ModifyKind::Any))
+                .add_path(relevant);
+            assert!(watch_event_affects_targets(&Ok(event), &targets));
+        }
     }
 }

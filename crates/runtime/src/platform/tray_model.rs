@@ -31,14 +31,16 @@ pub fn build_menu_model(snapshot: &TraySnapshot) -> TrayMenu {
             for (rule_index, rule) in recent.rules.iter().enumerate() {
                 let rule_prefix = format!("recent:{}:rule:{rule_index}", recent.transform_id);
                 let mut rule_menu = TrayMenuEntry::item(rule_prefix.clone(), rule.label.as_str());
-                rule_menu.children.push(entry(TrayMenuEntry::action(
+                let mut edit = TrayMenuEntry::action(
                     format!("{rule_prefix}:edit"),
                     "Edit rule",
                     TrayAction::EditRule {
                         rule_id: Some(rule.id.clone()),
                     },
                     None,
-                )));
+                );
+                edit.icon = Some(TrayIcon::new().with_macos_sf_symbol("pencil"));
+                rule_menu.children.push(entry(edit));
                 if snapshot.disable_for > 0 {
                     let mut disable = TrayMenuEntry::action(
                         format!("{rule_prefix}:disable"),
@@ -73,6 +75,7 @@ pub fn build_menu_model(snapshot: &TraySnapshot) -> TrayMenu {
                 None,
             );
             undo.enabled = recent.can_undo;
+            undo.icon = Some(TrayIcon::new().with_macos_sf_symbol("arrow.uturn.backward"));
             submenu.children.push(entry(undo));
             items.push(entry(submenu));
         }
@@ -254,7 +257,11 @@ fn action_items(snapshot: &TraySnapshot) -> Vec<TrayMenuItem> {
             "Copy config path".into(),
             TrayAction::CopyConfigPath,
             Some(MenuAccelerator::Copy),
-            None,
+            Some(
+                TrayIcon::new()
+                    .with_macos_sf_symbol("doc.on.doc")
+                    .with_linux_icon_name("edit-copy"),
+            ),
         ),
         (
             "clear-history",
@@ -270,7 +277,7 @@ fn action_items(snapshot: &TraySnapshot) -> Vec<TrayMenuItem> {
             Some(MenuAccelerator::Quit),
             Some(
                 TrayIcon::new()
-                    .with_macos_sf_symbol("xmark.circle")
+                    .with_macos_sf_symbol("xmark.rectangle")
                     .with_linux_icon_name("application-exit-symbolic"),
             ),
         ),
@@ -431,6 +438,19 @@ mod tests {
             .label
             .single_line_for(TrayPlatform::Other)
             .starts_with("Transformed result — "));
+
+        let rule = find_entry(&recent.children, &format!("recent:{transform_id}:rule:0"));
+        let edit = find_entry(
+            &rule.children,
+            &format!("recent:{transform_id}:rule:0:edit"),
+        );
+        assert_eq!(edit.icon.unwrap().macos_sf_symbol, Some("pencil"));
+
+        let undo = find_entry(&recent.children, &format!("recent:{transform_id}:undo"));
+        assert_eq!(
+            undo.icon.unwrap().macos_sf_symbol,
+            Some("arrow.uturn.backward")
+        );
     }
 
     #[test]

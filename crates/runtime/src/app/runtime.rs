@@ -1,5 +1,6 @@
 use anyhow::Result;
 use std::sync::mpsc::Receiver;
+use std::time::{Duration, Instant};
 
 use super::{reload::ConfigReloader, Agent, AppCommand, AppEffect, AppEvent};
 use crate::platform::autostart::AutostartStatus;
@@ -13,11 +14,35 @@ pub enum RuntimeControl {
     Quit,
 }
 
+const CLIPBOARD_CONTENTION_RETRY: Duration = Duration::from_millis(50);
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RuntimeWork {
+    pub commands: bool,
+    pub rule_results: bool,
+    pub config_events: bool,
+    pub clipboard_changed: bool,
+}
+
+impl RuntimeWork {
+    pub const fn all() -> Self {
+        Self {
+            commands: true,
+            rule_results: true,
+            config_events: true,
+            clipboard_changed: false,
+        }
+    }
+}
+
 pub struct Runtime<'a, C, N> {
     agent: &'a mut Agent<C, N>,
     reloader: Option<&'a mut ConfigReloader>,
     commands: &'a Receiver<AppCommand>,
     last_clipboard_change_count: Option<u64>,
+    clipboard_fallback_interval: Duration,
+    clipboard_notifications: bool,
+    next_clipboard_poll: Option<Instant>,
 }
 
 impl<'a, C, N> Runtime<'a, C, N>
@@ -30,11 +55,15 @@ where
         reloader: Option<&'a mut ConfigReloader>,
         commands: &'a Receiver<AppCommand>,
     ) -> Self {
+        let clipboard_fallback_interval = agent.clipboard_fallback_interval();
         Self {
             agent,
             reloader,
             commands,
             last_clipboard_change_count: None,
+            clipboard_fallback_interval,
+            clipboard_notifications: false,
+            next_clipboard_poll: Some(Instant::now()),
         }
     }
 
@@ -53,15 +82,34 @@ where
     /// — including the CLI, which owns no loop — depend on `ct-host-loop`. The
     /// two-variant conversion belongs to the host that runs the loop.
     pub fn process_pending(&mut self) -> Result<RuntimeControl> {
+        let now = Instant::now();
+        // Compatibility helper for non-event-loop callers and focused tests:
+        // explicitly requesting a full poll includes the clipboard source.
+        self.next_clipboard_poll = Some(now);
+        self.process(RuntimeWork::all(), now)
+    }
+
+    /// Drains only the sources that woke the host, plus timers whose explicit
+    /// deadlines have elapsed.
+    pub fn process(&mut self, work: RuntimeWork, now: Instant) -> Result<RuntimeControl> {
         // Tracks whether this tick changed anything, so tray-visible state is
         // republished exactly when it can have changed and never on a timer.
         // Every branch below that touches the agent sets it; that is the whole
         // discipline, and it lives in this one function.
-        let mut changed = self.agent.poll_rule_results()?;
+        let mut changed = if work.rule_results {
+            self.agent.poll_rule_results()?
+        } else {
+            false
+        };
 
+        let reload_due = self
+            .reloader
+            .as_deref()
+            .and_then(ConfigReloader::next_deadline)
+            .is_some_and(|deadline| deadline <= now);
         let reload_outcome = match self.reloader.as_deref_mut() {
-            Some(reloader) => reloader.poll()?,
-            None => None,
+            Some(reloader) if work.config_events || reload_due => reloader.poll()?,
+            Some(_) | None => None,
         };
         if let Some(outcome) = reload_outcome {
             changed = true;
@@ -71,47 +119,83 @@ where
             }
         }
 
-        while let Ok(command) = self.commands.try_recv() {
-            changed = true;
-            match self.agent.handle_event(AppEvent::UserCommand(command)) {
-                Ok(effects) => {
-                    if self.execute_effects(effects)? == RuntimeControl::Quit {
-                        return Ok(RuntimeControl::Quit);
-                    }
-                }
-                // A failed command (e.g. a clipboard write refused by another
-                // app) must not take the whole agent down.
-                Err(error) => crate::logging::event(format!("command failed: {error:#}")),
-            }
-        }
-
-        match self
-            .agent
-            .poll_clipboard(&mut self.last_clipboard_change_count)
-        {
-            Ok(Some(content)) => {
+        if work.commands {
+            while let Ok(command) = self.commands.try_recv() {
                 changed = true;
-                match self.agent.handle_event(AppEvent::ClipboardChanged(content)) {
+                match self.agent.handle_event(AppEvent::UserCommand(command)) {
                     Ok(effects) => {
                         if self.execute_effects(effects)? == RuntimeControl::Quit {
                             return Ok(RuntimeControl::Quit);
                         }
                     }
-                    Err(error) => {
-                        crate::logging::event(format!("clipboard transform failed: {error:#}"))
-                    }
+                    // A failed command (e.g. a clipboard write refused by another
+                    // app) must not take the whole agent down.
+                    Err(error) => crate::logging::event(format!("command failed: {error:#}")),
                 }
             }
-            Ok(None) => {}
-            // Transient clipboard contention (common on Windows when another
-            // process holds the clipboard) is retried on the next poll tick.
-            Err(error) => crate::logging::event(format!("clipboard poll failed: {error:#}")),
+        }
+
+        let clipboard_due = self
+            .next_clipboard_poll
+            .is_some_and(|deadline| now >= deadline);
+        if work.clipboard_changed || clipboard_due {
+            match self
+                .agent
+                .poll_clipboard(&mut self.last_clipboard_change_count)
+            {
+                Ok(Some(content)) => {
+                    self.schedule_clipboard_fallback(now);
+                    changed = true;
+                    match self.agent.handle_event(AppEvent::ClipboardChanged(content)) {
+                        Ok(effects) => {
+                            if self.execute_effects(effects)? == RuntimeControl::Quit {
+                                return Ok(RuntimeControl::Quit);
+                            }
+                        }
+                        Err(error) => {
+                            crate::logging::event(format!("clipboard transform failed: {error:#}"))
+                        }
+                    }
+                }
+                Ok(None) => {
+                    self.schedule_clipboard_fallback(now);
+                }
+                // Transient clipboard contention gets a dedicated short retry
+                // deadline instead of relying on an unrelated host tick.
+                Err(error) => {
+                    self.next_clipboard_poll = Some(now + CLIPBOARD_CONTENTION_RETRY);
+                    crate::logging::event(format!("clipboard poll failed: {error:#}"));
+                }
+            }
         }
 
         if changed {
             self.agent.publish_tray_state();
         }
         Ok(RuntimeControl::Continue)
+    }
+
+    pub fn next_deadline(&self) -> Option<Instant> {
+        let reload = self
+            .reloader
+            .as_deref()
+            .and_then(ConfigReloader::next_deadline);
+        match (reload, self.next_clipboard_poll) {
+            (Some(left), Some(right)) => Some(left.min(right)),
+            (Some(deadline), None) | (None, Some(deadline)) => Some(deadline),
+            (None, None) => None,
+        }
+    }
+
+    /// Uses reliable native clipboard notifications after the mandatory first
+    /// observation. Transient read failures still install a retry deadline.
+    pub fn set_clipboard_notifications(&mut self, enabled: bool) {
+        self.clipboard_notifications = enabled;
+    }
+
+    fn schedule_clipboard_fallback(&mut self, now: Instant) {
+        self.next_clipboard_poll =
+            (!self.clipboard_notifications).then_some(now + self.clipboard_fallback_interval);
     }
 
     pub fn tray_snapshot(&self) -> TraySnapshot {
@@ -426,5 +510,121 @@ mod tests {
                 .unwrap()
                 .unwrap();
         assert_eq!(snapshot.item.text(), Some("cat"));
+    }
+
+    #[test]
+    fn a_command_wake_does_not_probe_unrelated_clipboard_state() {
+        let (commands, receiver) = std::sync::mpsc::channel();
+        let (clipboard, observed) = ObservedClipboard::new("bird");
+        let mut agent = Agent::new(
+            clipboard,
+            NoopNotificationBackend::default(),
+            ConfigDocument {
+                plugins: Default::default(),
+                config: AppConfig::default(),
+                rules: Vec::new(),
+            },
+        )
+        .unwrap();
+        let mut runtime = Runtime::new(&mut agent, None, &receiver);
+        let now = Instant::now();
+        runtime.process(RuntimeWork::all(), now).unwrap();
+        let clipboard_calls = observed.borrow().change_count_calls;
+
+        commands.send(AppCommand::SetPaused(true)).unwrap();
+        runtime
+            .process(
+                RuntimeWork {
+                    commands: true,
+                    ..RuntimeWork::default()
+                },
+                now + Duration::from_millis(1),
+            )
+            .unwrap();
+
+        assert_eq!(observed.borrow().change_count_calls, clipboard_calls);
+        assert!(runtime.tray_snapshot().paused);
+    }
+
+    #[test]
+    fn coalesced_command_wakes_preserve_channel_order() {
+        let (commands, receiver) = std::sync::mpsc::channel();
+        commands.send(AppCommand::SetPaused(true)).unwrap();
+        commands.send(AppCommand::SetPaused(false)).unwrap();
+        let mut agent = agent(None);
+        let mut runtime = Runtime::new(&mut agent, None, &receiver);
+
+        runtime
+            .process(
+                RuntimeWork {
+                    commands: true,
+                    ..RuntimeWork::default()
+                },
+                Instant::now(),
+            )
+            .unwrap();
+
+        assert!(!runtime.tray_snapshot().paused);
+    }
+
+    #[test]
+    fn completed_rule_job_calls_the_wake_sink() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+
+        let (_commands, receiver) = std::sync::mpsc::channel();
+        let wake_count = Arc::new(AtomicUsize::new(0));
+        let worker_count = Arc::clone(&wake_count);
+        let mut agent = agent(Some("cat"));
+        agent.set_wake_sink(Arc::new(move || {
+            worker_count.fetch_add(1, Ordering::Release);
+        }));
+        let mut runtime = Runtime::new(&mut agent, None, &receiver);
+        runtime.process_pending().unwrap();
+
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while wake_count.load(Ordering::Acquire) == 0 {
+            assert!(
+                Instant::now() < deadline,
+                "rule worker did not wake the host"
+            );
+            std::thread::yield_now();
+        }
+    }
+
+    #[test]
+    fn reliable_clipboard_notifications_remove_the_fallback_deadline() {
+        let (_commands, receiver) = std::sync::mpsc::channel();
+        let (clipboard, observed) = ObservedClipboard::new("bird");
+        let mut agent = Agent::new(
+            clipboard,
+            NoopNotificationBackend::default(),
+            ConfigDocument {
+                plugins: Default::default(),
+                config: AppConfig::default(),
+                rules: Vec::new(),
+            },
+        )
+        .unwrap();
+        let mut runtime = Runtime::new(&mut agent, None, &receiver);
+        runtime.set_clipboard_notifications(true);
+        let now = Instant::now();
+        runtime.process(RuntimeWork::all(), now).unwrap();
+        assert_eq!(runtime.next_deadline(), None);
+        let calls = observed.borrow().change_count_calls;
+
+        observed.borrow_mut().change_count += 1;
+        runtime
+            .process(
+                RuntimeWork {
+                    clipboard_changed: true,
+                    ..RuntimeWork::default()
+                },
+                now + Duration::from_secs(30),
+            )
+            .unwrap();
+
+        assert!(observed.borrow().change_count_calls > calls);
+        assert_eq!(runtime.next_deadline(), None);
     }
 }

@@ -5,6 +5,7 @@ mod item;
 pub mod native;
 
 use std::collections::BTreeSet;
+use std::time::Duration;
 
 use anyhow::Result;
 use schemars::JsonSchema;
@@ -79,6 +80,12 @@ impl ClipboardMetadata {
 }
 
 pub trait ClipboardBackend {
+    /// Compatibility observation deadline when the host has no reliable
+    /// native clipboard-change notification for this backend/session.
+    fn fallback_poll_interval(&self) -> Duration {
+        Duration::from_millis(200)
+    }
+
     fn change_count(&mut self) -> Result<Option<u64>> {
         Ok(None)
     }
@@ -131,6 +138,10 @@ impl<T> ClipboardBackend for Box<T>
 where
     T: ClipboardBackend + ?Sized,
 {
+    fn fallback_poll_interval(&self) -> Duration {
+        (**self).fallback_poll_interval()
+    }
+
     fn change_count(&mut self) -> Result<Option<u64>> {
         (**self).change_count()
     }

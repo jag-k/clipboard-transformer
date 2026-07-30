@@ -390,7 +390,11 @@ unsafe fn tray_data_ptr(hwnd: HWND) -> *mut TrayData {
 
 fn create_icon(dark_theme: bool) -> Result<HICON> {
     let pixels = crate::themed_icon(dark_theme);
-    let mut bgra = pixels.rgba.to_vec();
+    pixels.validate().map_err(|error| anyhow::anyhow!(error))?;
+    let mut bgra = pixels
+        .rgba8()
+        .context("Windows tray icon must use RGBA8 pixels")?
+        .to_vec();
     for pixel in bgra.chunks_exact_mut(4) {
         pixel.swap(0, 2);
         let alpha = u16::from(pixel[3]);

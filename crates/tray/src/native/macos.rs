@@ -9,21 +9,37 @@ use objc2::{
     define_class, msg_send, sel, ClassType, DeclaredClass, MainThreadMarker, MainThreadOnly,
 };
 use objc2_app_kit::{
-    NSBitmapFormat, NSBitmapImageRep, NSControlStateValueOff, NSControlStateValueOn,
-    NSEventModifierFlags, NSImage, NSMenu, NSMenuDelegate, NSMenuItem, NSStatusBar, NSStatusItem,
-    NSVariableStatusItemLength,
+    NSBitmapFormat, NSBitmapImageRep, NSCellImagePosition, NSControlStateValueOff,
+    NSControlStateValueOn, NSEventModifierFlags, NSImage, NSMenu, NSMenuDelegate, NSMenuItem,
+    NSSquareStatusItemLength, NSStatusBar, NSStatusItem,
 };
 use objc2_foundation::{NSObject, NSObjectProtocol, NSSize, NSString};
 
 use crate::{
-    accelerator_model, AcceleratorKey, ActionSink, TrayAction, TrayMenuItem, TrayMenuSource,
-    TrayPlatform,
+    accelerator_model, AcceleratorKey, ActionSink, TrayAction, TrayMenuEntry, TrayMenuItem,
+    TrayMenuSource, TrayPlatform,
 };
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum NativeMenuKey {
+    Entry(String),
+    Separator(usize),
+}
+
+struct NativeMenuItem {
+    key: NativeMenuKey,
+    item: Retained<NSMenuItem>,
+    submenu: Option<Retained<NSMenu>>,
+    children: Vec<NativeMenuItem>,
+}
 
 struct MenuControllerIvars {
     commands: ActionSink,
     menu: TrayMenuSource,
     command_by_tag: RefCell<HashMap<isize, TrayAction>>,
+    native_items: RefCell<Vec<NativeMenuItem>>,
+    symbol_images: RefCell<HashMap<&'static str, Retained<NSImage>>>,
+    supports_subtitle: bool,
 }
 
 define_class!(
@@ -60,6 +76,14 @@ impl MenuController {
             commands,
             menu,
             command_by_tag: RefCell::new(HashMap::new()),
+            native_items: RefCell::new(Vec::new()),
+            symbol_images: RefCell::new(HashMap::new()),
+            supports_subtitle: unsafe {
+                msg_send![
+                    NSMenuItem::class(),
+                    instancesRespondToSelector: sel!(setSubtitle:)
+                ]
+            },
         });
         unsafe { msg_send![super(this), init] }
     }
@@ -67,10 +91,21 @@ impl MenuController {
     fn rebuild(&self, menu: &NSMenu) {
         // Called from `menuNeedsUpdate:`, so relative timestamps are current.
         let model = (self.ivars().menu)();
-        self.ivars().command_by_tag.borrow_mut().clear();
-        menu.removeAllItems();
+        let mut command_by_tag = HashMap::new();
         let mut next_tag = 1isize;
-        append_items(menu, &model.items, self, &mut next_tag);
+        reconcile_items(
+            menu,
+            &mut self.ivars().native_items.borrow_mut(),
+            &model.items,
+            self,
+            &mut next_tag,
+            &mut command_by_tag,
+        );
+
+        // Swap both semantic dispatch tables only after the complete native
+        // tree is consistent. AppKit can never observe a tag pointing at a
+        // command from the previous model.
+        *self.ivars().command_by_tag.borrow_mut() = command_by_tag;
     }
 }
 
@@ -91,8 +126,16 @@ impl MacosTray {
         menu.setDelegate(Some(ProtocolObject::from_ref(&*controller)));
         controller.rebuild(&menu);
 
+        // This status item has no title, so give AppKit the icon-only square
+        // contract explicitly. Variable length is intended for content-driven
+        // items and can leave an image-only button without a visible slot.
         let status_item =
-            NSStatusBar::systemStatusBar().statusItemWithLength(NSVariableStatusItemLength);
+            NSStatusBar::systemStatusBar().statusItemWithLength(NSSquareStatusItemLength);
+        // AppKit persists a status item's visibility and position by this
+        // name. Keep it globally unique so the item cannot inherit another
+        // application's saved menu-bar visibility.
+        let autosave_name = NSString::from_str("dev.jag-k.clipboard-transformer.status-item");
+        status_item.setAutosaveName(Some(&autosave_name));
         status_item.setMenu(Some(&menu));
         let button = status_item
             .button(mtm)
@@ -100,8 +143,17 @@ impl MacosTray {
         button.setToolTip(Some(&NSString::from_str("Clipboard Transformer")));
         let icon = status_icon(mtm)?;
         button.setImage(Some(&icon));
+        button.setImagePosition(NSCellImagePosition::ImageOnly);
 
-        log::info!("native macOS tray initialized");
+        let size = icon.size();
+        log::info!(
+            "native macOS tray initialized autosave_name={} visible={} length={} image={}x{}",
+            autosave_name,
+            status_item.isVisible(),
+            status_item.length(),
+            size.width,
+            size.height
+        );
         Ok(Self {
             status_item,
             _menu: menu,
@@ -116,97 +168,181 @@ impl Drop for MacosTray {
     }
 }
 
-fn append_items(
+fn reconcile_items(
     menu: &NSMenu,
-    items: &[TrayMenuItem],
+    native_items: &mut Vec<NativeMenuItem>,
+    model_items: &[TrayMenuItem],
     controller: &MenuController,
     next_tag: &mut isize,
+    command_by_tag: &mut HashMap<isize, TrayAction>,
 ) {
     let mtm = MainThreadMarker::from(menu);
-    for item in items {
-        let TrayMenuItem::Entry(item) = item else {
-            menu.addItem(&NSMenuItem::separatorItem(mtm));
-            continue;
+    for (index, model_item) in model_items.iter().enumerate() {
+        let key = item_key(model_item, index);
+        let existing_index = native_items.iter().position(|native| native.key == key);
+        let mut native = match existing_index {
+            Some(existing_index) => {
+                let native = native_items.remove(existing_index);
+                if existing_index != index {
+                    menu.removeItem(&native.item);
+                    menu.insertItem_atIndex(&native.item, index as isize);
+                }
+                native
+            }
+            None => {
+                let native = create_native_item(mtm, key.clone(), model_item);
+                menu.insertItem_atIndex(&native.item, index as isize);
+                native
+            }
         };
-        if !item.visible {
-            continue;
-        }
 
-        let supports_subtitle: bool = unsafe {
-            msg_send![
-                NSMenuItem::class(),
-                instancesRespondToSelector: sel!(setSubtitle:)
-            ]
-        };
-        let has_subtitle = item.label.has_subtitle() && supports_subtitle;
-        let title = if has_subtitle {
-            item.label.title_for(TrayPlatform::Macos)
-        } else {
-            item.label.single_line_for(TrayPlatform::Macos)
-        };
-        let key = item.accelerator.map(accelerator_key).unwrap_or_default();
-        let native = unsafe {
+        match model_item {
+            TrayMenuItem::Separator => {}
+            TrayMenuItem::Entry(entry) => {
+                update_native_entry(&mut native, entry, controller, next_tag, command_by_tag)
+            }
+        }
+        native_items.insert(index, native);
+    }
+
+    while native_items.len() > model_items.len() {
+        let stale = native_items.pop().expect("length was checked");
+        menu.removeItem(&stale.item);
+    }
+}
+
+fn item_key(item: &TrayMenuItem, index: usize) -> NativeMenuKey {
+    match item {
+        TrayMenuItem::Entry(entry) => NativeMenuKey::Entry(entry.id.clone()),
+        TrayMenuItem::Separator => NativeMenuKey::Separator(index),
+    }
+}
+
+fn create_native_item(
+    mtm: MainThreadMarker,
+    key: NativeMenuKey,
+    model_item: &TrayMenuItem,
+) -> NativeMenuItem {
+    let item = match model_item {
+        TrayMenuItem::Separator => NSMenuItem::separatorItem(mtm),
+        TrayMenuItem::Entry(_) => unsafe {
             NSMenuItem::initWithTitle_action_keyEquivalent(
                 mtm.alloc(),
-                &NSString::from_str(title),
+                &NSString::new(),
                 None,
-                &NSString::from_str(key),
+                &NSString::new(),
             )
-        };
-        native.setEnabled(item.enabled);
-        if has_subtitle {
-            native.setSubtitle(
-                item.label
-                    .subtitle_for(TrayPlatform::Macos)
-                    .map(NSString::from_str)
-                    .as_deref(),
-            );
-        }
-        if let Some(checked) = item.checked {
-            native.setState(if checked {
-                NSControlStateValueOn
-            } else {
-                NSControlStateValueOff
-            });
-        }
-        if let Some(accelerator) = item.accelerator {
-            native.setKeyEquivalentModifierMask(accelerator_modifiers(accelerator));
-        }
-        if let Some(symbol) = item
-            .icon
-            .and_then(|icon| icon.name_for(TrayPlatform::Macos))
-        {
-            let description = NSString::from_str(title);
-            if let Some(icon) = NSImage::imageWithSystemSymbolName_accessibilityDescription(
-                &NSString::from_str(symbol),
-                Some(&description),
-            ) {
-                native.setImage(Some(&icon));
-            }
-        }
+        },
+    };
+    NativeMenuItem {
+        key,
+        item,
+        submenu: None,
+        children: Vec::new(),
+    }
+}
 
-        if item.children.is_empty() {
-            if let Some(command) = &item.command {
-                let tag = *next_tag;
-                *next_tag += 1;
-                controller
-                    .ivars()
-                    .command_by_tag
-                    .borrow_mut()
-                    .insert(tag, command.clone());
-                native.setTag(tag);
-                unsafe {
-                    native.setTarget(Some(controller));
-                    native.setAction(Some(sel!(performTrayCommand:)));
-                }
+fn update_native_entry(
+    native: &mut NativeMenuItem,
+    item: &TrayMenuEntry,
+    controller: &MenuController,
+    next_tag: &mut isize,
+    command_by_tag: &mut HashMap<isize, TrayAction>,
+) {
+    let has_subtitle = item.label.has_subtitle() && controller.ivars().supports_subtitle;
+    let title = if has_subtitle {
+        item.label.title_for(TrayPlatform::Macos)
+    } else {
+        item.label.single_line_for(TrayPlatform::Macos)
+    };
+    native.item.setTitle(&NSString::from_str(title));
+    native.item.setEnabled(item.enabled);
+    native.item.setHidden(!item.visible);
+    native.item.setState(match item.checked {
+        Some(true) => NSControlStateValueOn,
+        Some(false) | None => NSControlStateValueOff,
+    });
+    if controller.ivars().supports_subtitle {
+        native.item.setSubtitle(
+            has_subtitle
+                .then(|| item.label.subtitle_for(TrayPlatform::Macos))
+                .flatten()
+                .map(NSString::from_str)
+                .as_deref(),
+        );
+    }
+
+    let key = item.accelerator.map(accelerator_key).unwrap_or_default();
+    native.item.setKeyEquivalent(&NSString::from_str(key));
+    native.item.setKeyEquivalentModifierMask(
+        item.accelerator
+            .map(accelerator_modifiers)
+            .unwrap_or_else(NSEventModifierFlags::empty),
+    );
+
+    let symbol = item
+        .icon
+        .and_then(|icon| icon.name_for(TrayPlatform::Macos));
+    let image = symbol.and_then(|symbol| {
+        if let Some(image) = controller.ivars().symbol_images.borrow().get(symbol) {
+            return Some(image.clone());
+        }
+        let image = NSImage::imageWithSystemSymbolName_accessibilityDescription(
+            &NSString::from_str(symbol),
+            None,
+        )?;
+        controller
+            .ivars()
+            .symbol_images
+            .borrow_mut()
+            .insert(symbol, image.clone());
+        Some(image)
+    });
+    native.item.setImage(image.as_deref());
+
+    if item.children.is_empty() {
+        if native.submenu.take().is_some() {
+            native.item.setSubmenu(None);
+            native.children.clear();
+        }
+        if let Some(command) = &item.command {
+            let tag = *next_tag;
+            *next_tag += 1;
+            command_by_tag.insert(tag, command.clone());
+            native.item.setTag(tag);
+            unsafe {
+                native.item.setTarget(Some(controller));
+                native.item.setAction(Some(sel!(performTrayCommand:)));
             }
         } else {
+            native.item.setTag(0);
+            unsafe {
+                native.item.setTarget(None);
+                native.item.setAction(None);
+            }
+        }
+    } else {
+        native.item.setTag(0);
+        unsafe {
+            native.item.setTarget(None);
+            native.item.setAction(None);
+        }
+        if native.submenu.is_none() {
+            let mtm = MainThreadMarker::from(&*native.item);
             let submenu = NSMenu::new(mtm);
             submenu.setAutoenablesItems(false);
-            append_items(&submenu, &item.children, controller, next_tag);
-            native.setSubmenu(Some(&submenu));
+            native.item.setSubmenu(Some(&submenu));
+            native.submenu = Some(submenu);
         }
-        menu.addItem(&native);
+        let submenu = native.submenu.as_ref().expect("submenu was created");
+        reconcile_items(
+            submenu,
+            &mut native.children,
+            &item.children,
+            controller,
+            next_tag,
+            command_by_tag,
+        );
     }
 }
 
@@ -240,6 +376,10 @@ fn accelerator_modifiers(accelerator: crate::MenuAccelerator) -> NSEventModifier
 
 fn status_icon(mtm: MainThreadMarker) -> Result<Retained<NSImage>> {
     let pixels = crate::macos_template_icon();
+    pixels.validate().map_err(|error| anyhow::anyhow!(error))?;
+    if pixels.format != crate::PixelFormat::GrayAlpha8 {
+        anyhow::bail!("macOS template tray icon must use GrayAlpha8 pixels");
+    }
     let bitmap = unsafe {
         NSBitmapImageRep::initWithBitmapDataPlanes_pixelsWide_pixelsHigh_bitsPerSample_samplesPerPixel_hasAlpha_isPlanar_colorSpaceName_bitmapFormat_bytesPerRow_bitsPerPixel(
             mtm.alloc(),
@@ -247,23 +387,22 @@ fn status_icon(mtm: MainThreadMarker) -> Result<Retained<NSImage>> {
             pixels.width as isize,
             pixels.height as isize,
             8,
-            4,
+            2,
             true,
             false,
-            objc2_app_kit::NSDeviceRGBColorSpace,
+            objc2_app_kit::NSDeviceWhiteColorSpace,
             NSBitmapFormat::AlphaNonpremultiplied,
-            (pixels.width * 4) as isize,
-            32,
+            pixels.stride as isize,
+            16,
         )
     }
     .context("create macOS tray bitmap")?;
     unsafe {
-        ptr::copy_nonoverlapping(pixels.rgba.as_ptr(), bitmap.bitmapData(), pixels.rgba.len());
+        ptr::copy_nonoverlapping(pixels.data.as_ptr(), bitmap.bitmapData(), pixels.data.len());
     }
-    let image = NSImage::initWithSize(
-        mtm.alloc(),
-        NSSize::new(pixels.width as f64, pixels.height as f64),
-    );
+    let logical_size = NSSize::new(pixels.logical_width as f64, pixels.logical_height as f64);
+    bitmap.setSize(logical_size);
+    let image = NSImage::initWithSize(mtm.alloc(), logical_size);
     image.addRepresentation(&bitmap);
     image.setTemplate(true);
     Ok(image)

@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use ct_core::ExternalRuleProvider;
 
-pub use worker::{RuleWorker, RuleWorkerCompletion, RuleWorkerOutcome};
+pub use worker::{RuleWorker, RuleWorkerCompletion, RuleWorkerOutcome, WakeSink};
 
 pub fn external_providers(
     config: &crate::config::AppConfig,

@@ -47,12 +47,60 @@ pub type ActionSink = Box<dyn Fn(TrayAction) + Send>;
 #[cfg(feature = "native")]
 pub type TrayMenuSource = Box<dyn Fn() -> TrayMenu + Send>;
 
-/// Pixel buffer for a rendered tray icon.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PixelFormat {
+    Rgba8,
+    GrayAlpha8,
+}
+
+impl PixelFormat {
+    pub const fn bytes_per_pixel(self) -> u32 {
+        match self {
+            Self::Rgba8 => 4,
+            Self::GrayAlpha8 => 2,
+        }
+    }
+}
+
+/// Pixel buffer for a rendered tray icon, including its exact byte layout.
+#[derive(Clone, Copy, Debug)]
 pub struct TrayIconPixels {
+    /// Dimensions of the encoded pixel payload.
     pub width: u32,
     pub height: u32,
-    pub rgba: &'static [u8],
+    /// Dimensions in platform-independent display units.
+    pub logical_width: u32,
+    pub logical_height: u32,
+    pub format: PixelFormat,
+    pub stride: u32,
+    pub data: &'static [u8],
+}
+
+impl TrayIconPixels {
+    pub fn validate(self) -> Result<(), &'static str> {
+        if self.logical_width == 0 || self.logical_height == 0 {
+            return Err("tray icon logical dimensions must be non-zero");
+        }
+        let minimum_stride = self
+            .width
+            .checked_mul(self.format.bytes_per_pixel())
+            .ok_or("tray icon row size overflows")?;
+        if self.stride < minimum_stride {
+            return Err("tray icon stride is shorter than one row");
+        }
+        let expected = self
+            .stride
+            .checked_mul(self.height)
+            .ok_or("tray icon payload size overflows")? as usize;
+        if self.data.len() != expected {
+            return Err("tray icon payload length does not match dimensions and stride");
+        }
+        Ok(())
+    }
+
+    pub fn rgba8(self) -> Option<&'static [u8]> {
+        (self.format == PixelFormat::Rgba8).then_some(self.data)
+    }
 }
 
 include!("native/icons.rs");

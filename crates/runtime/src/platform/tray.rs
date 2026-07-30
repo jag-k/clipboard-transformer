@@ -325,10 +325,16 @@ mod tests {
     }
 
     #[test]
-    fn generated_icons_have_complete_rgba_buffers() {
+    fn generated_icons_have_valid_explicit_pixel_layouts() {
         for icon in [macos_template_icon(), themed_icon(false), themed_icon(true)] {
-            assert_eq!(icon.rgba.len(), (icon.width * icon.height * 4) as usize);
+            icon.validate().unwrap();
         }
+        assert_eq!(
+            macos_template_icon().format,
+            ct_tray::PixelFormat::GrayAlpha8
+        );
+        assert_eq!(themed_icon(false).format, ct_tray::PixelFormat::Rgba8);
+        assert_eq!(themed_icon(true).format, ct_tray::PixelFormat::Rgba8);
     }
 
     fn snapshot_with_warnings(warnings: Vec<ConfigWarning>) -> TraySnapshot {

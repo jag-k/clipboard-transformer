@@ -1,5 +1,6 @@
 use std::collections::BTreeSet;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
+use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
@@ -20,6 +21,7 @@ enum RuleWorkerCommand {
 }
 
 pub type RuleWorkerOutcome = std::result::Result<Option<TransformResult>, String>;
+pub type WakeSink = Arc<dyn Fn() + Send + Sync>;
 
 pub struct RuleWorkerCompletion {
     pub job_id: u64,
@@ -29,6 +31,7 @@ pub struct RuleWorkerCompletion {
 pub struct RuleWorker {
     commands: Sender<RuleWorkerCommand>,
     completions: Receiver<RuleWorkerCompletion>,
+    wake: Arc<Mutex<Option<WakeSink>>>,
     thread: Option<JoinHandle<()>>,
 }
 
@@ -36,6 +39,8 @@ impl RuleWorker {
     pub fn start(mut engine: RuleEngine) -> Result<Self> {
         let (command_sender, commands) = mpsc::channel();
         let (completion_sender, completions) = mpsc::channel();
+        let wake = Arc::new(Mutex::new(None::<WakeSink>));
+        let worker_wake = Arc::clone(&wake);
         let thread = thread::Builder::new()
             .name("clipboard-transformer-rules".to_string())
             .spawn(move || {
@@ -52,11 +57,18 @@ impl RuleWorker {
                                 .map_err(|error| format!("{error:#}"));
                             if let Some(reply) = reply {
                                 let _ = reply.send(outcome);
-                            } else if completion_sender
-                                .send(RuleWorkerCompletion { job_id, outcome })
-                                .is_err()
-                            {
-                                break;
+                            } else {
+                                if completion_sender
+                                    .send(RuleWorkerCompletion { job_id, outcome })
+                                    .is_err()
+                                {
+                                    break;
+                                }
+                                if let Ok(wake) = worker_wake.lock() {
+                                    if let Some(wake) = wake.as_ref() {
+                                        wake();
+                                    }
+                                }
                             }
                         }
                         RuleWorkerCommand::ReplaceEngine(replacement) => engine = replacement,
@@ -68,8 +80,15 @@ impl RuleWorker {
         Ok(Self {
             commands: command_sender,
             completions,
+            wake,
             thread: Some(thread),
         })
+    }
+
+    pub fn set_wake_sink(&self, wake: WakeSink) {
+        if let Ok(mut current) = self.wake.lock() {
+            *current = Some(wake);
+        }
     }
 
     pub fn submit(

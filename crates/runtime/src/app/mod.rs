@@ -260,6 +260,18 @@ where
         self.tray_state = Some(handle);
     }
 
+    /// Wakes the desktop host when an asynchronous rule job completes.
+    ///
+    /// The callback contract keeps the runtime independent of the concrete
+    /// native host-loop implementation.
+    pub fn set_wake_sink(&self, wake: crate::rules::WakeSink) {
+        self.rule_worker.set_wake_sink(wake);
+    }
+
+    pub(crate) fn clipboard_fallback_interval(&self) -> Duration {
+        self.clipboard.fallback_poll_interval()
+    }
+
     /// Writes current tray-visible state through to the shared handle.
     ///
     /// Driven from exactly one place — the end of a host tick that did work (see
