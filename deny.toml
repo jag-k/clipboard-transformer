@@ -21,6 +21,11 @@ version = 2
 yanked = "deny"
 # Every entry needs a reason and must be re-checked, not inherited forever.
 ignore = [
+  # Wasmtime is reached only through the Extism plugin runtime. Extism 1.30
+  # pins Wasmtime to the vulnerable 43.x line; the advisory is low severity
+  # and its fixes start at 46.0.2, so no compatible Cargo update exists yet.
+  # Keep this as a warning until Extism publishes a compatible Wasmtime upgrade.
+  { id = "RUSTSEC-2026-0222", reason = "low-severity Wasmtime advisory in transitive Extism runtime; no patched Extism-compatible version is available" },
   # Two quick-xml DoS advisories (quadratic attribute scan, unbounded namespace
   # allocation) reached only through `wayland-scanner`, which is a proc-macro
   # crate: it runs during compilation and is not linked into any shipped
