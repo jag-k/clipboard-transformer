@@ -45,6 +45,9 @@ The format is based on [Keep a Changelog], and this project follows
 
 ### Fixed
 
+- **Windows/Installer:** Statically link the C runtime into the desktop and
+  CLI executables so a clean Windows installation can launch them without a
+  separate Visual C++ Redistributable.
 - **Windows/Desktop:** Embed the Clipboard Transformer product name in the GUI
   executable so Task Manager does not show the internal `ct-desktop` package
   name.

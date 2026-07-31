@@ -4,3 +4,8 @@
 # hardcoded number of `..` segments from CARGO_MANIFEST_DIR, which silently
 # breaks whenever a package changes nesting depth.
 CT_WORKSPACE_ROOT = { value = ".", relative = true }
+
+[target.x86_64-pc-windows-msvc]
+# Ship self-contained Windows executables so a clean Windows installation does
+# not need the Visual C++ runtime before either host can start.
+rustflags = ["-C", "target-feature=+crt-static"]
