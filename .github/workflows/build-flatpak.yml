@@ -1,0 +1,111 @@
+name: Build Flatpak
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/build-flatpak.yml"
+      - "apps/**"
+      - "assets/generated/linux/**"
+      - "assets/tray.svg"
+      - "crates/**"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "package/flatpak/**"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/build-flatpak.yml"
+      - "apps/**"
+      - "assets/generated/linux/**"
+      - "assets/tray.svg"
+      - "crates/**"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "package/flatpak/**"
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version matching Cargo.toml and Flatpak metadata
+        required: true
+        type: string
+
+permissions:
+  attestations: write
+  contents: read
+  id-token: write
+
+jobs:
+  build-flatpak:
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-25.08
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+
+      - name: Generate Flatpak Cargo sources
+        shell: bash
+        run: package/flatpak/update-cargo-sources.sh
+
+      - name: Check package version
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo_version="$(
+            sed -nE 's/^version = "([^"]+)"$/\1/p' Cargo.toml | head -n 1
+          )"
+          version="${{ inputs.version }}"
+          version="${version:-$cargo_version}"
+          metainfo_version="$(
+            sed -nE 's/.*<release version="([^"]+)" date="[^"]+".*/\1/p' \
+              package/flatpak/dev.jag_k.clipboard_transformer.metainfo.xml
+          )"
+          if [[ "${version}" != "${cargo_version}" \
+            || "${version}" != "${metainfo_version}" ]]; then
+            echo "Release (${version}), Cargo.toml (${cargo_version}), and Flatpak metadata (${metainfo_version}) versions must match" >&2
+            exit 1
+          fi
+          echo "VERSION=${version}" >> "${GITHUB_ENV}"
+
+      - name: Build Flatpak bundle
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: clipboard-transformer.flatpak
+          manifest-path: package/flatpak/dev.jag_k.clipboard_transformer.json
+          cache-key: flatpak-builder-${{ hashFiles('Cargo.lock', 'package/flatpak/**') }}
+          branch: stable
+          repository-name: flathub
+          repository-url: https://flathub.org/repo/flathub.flatpakrepo
+          upload-artifact: false
+
+      - name: Create checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle="clipboard-transformer-${VERSION}-x86_64.flatpak"
+          mkdir -p target/distrib-flatpak
+          mv clipboard-transformer.flatpak "target/distrib-flatpak/${bundle}"
+          sha256sum "target/distrib-flatpak/${bundle}" \
+            > "target/distrib-flatpak/${bundle}.sha256"
+
+      - name: Attest Flatpak bundle
+        uses: actions/attest@v4
+        with:
+          subject-path: target/distrib-flatpak/*
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: artifacts-linux-flatpak
+          path: target/distrib-flatpak/*
+          if-no-files-found: error

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Clipboard Transformer
+Comment=Transform clipboard content with configurable rules
+Exec=clipboard-transformer-app
+Icon=dev.jag_k.clipboard_transformer
+Terminal=false
+Categories=Utility;
+StartupNotify=false
+X-GNOME-UsesNotifications=true

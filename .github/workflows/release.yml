@@ -20,6 +20,7 @@ jobs:
       windows_enabled: ${{ steps.release.outputs.windows_enabled }}
       linux_enabled: ${{ steps.release.outputs.linux_enabled }}
       homebrew_enabled: ${{ steps.release.outputs.homebrew_enabled }}
+      flatpak_publish_enabled: ${{ steps.release.outputs.flatpak_publish_enabled }}
       scoop_enabled: ${{ steps.release.outputs.scoop_enabled }}
       aur_enabled: ${{ steps.release.outputs.aur_enabled }}
       winget_enabled: ${{ steps.release.outputs.winget_enabled }}
@@ -37,6 +38,7 @@ jobs:
           WINDOWS_RELEASE_ENABLED: ${{ vars.WINDOWS_RELEASE_ENABLED }}
           LINUX_RELEASE_ENABLED: ${{ vars.LINUX_RELEASE_ENABLED }}
           HOMEBREW_PUBLISH_ENABLED: ${{ vars.HOMEBREW_PUBLISH_ENABLED }}
+          FLATPAK_PUBLISH_ENABLED: ${{ vars.FLATPAK_PUBLISH_ENABLED }}
           SCOOP_PUBLISH_ENABLED: ${{ vars.SCOOP_PUBLISH_ENABLED }}
           AUR_PUBLISH_ENABLED: ${{ vars.AUR_PUBLISH_ENABLED }}
           WINGET_PUBLISH_ENABLED: ${{ vars.WINGET_PUBLISH_ENABLED }}
@@ -46,6 +48,9 @@ jobs:
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          FLATPAK_REPOSITORY_TOKEN: ${{ secrets.FLATPAK_REPOSITORY_TOKEN }}
+          FLATPAK_GPG_KEY_ID: ${{ secrets.FLATPAK_GPG_KEY_ID }}
+          FLATPAK_GPG_PRIVATE_KEY: ${{ secrets.FLATPAK_GPG_PRIVATE_KEY }}
           SCOOP_BUCKET_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
           AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
           WINGET_CREATE_GITHUB_TOKEN: ${{ secrets.WINGET_CREATE_GITHUB_TOKEN }}
@@ -95,7 +100,8 @@ jobs:
             echo "release_enabled=false" >> "${GITHUB_OUTPUT}"
             for output in \
               macos_enabled windows_enabled linux_enabled \
-              homebrew_enabled scoop_enabled aur_enabled winget_enabled; do
+              homebrew_enabled flatpak_publish_enabled scoop_enabled \
+              aur_enabled winget_enabled; do
               echo "${output}=false" >> "${GITHUB_OUTPUT}"
             done
             exit 0
@@ -105,6 +111,7 @@ jobs:
           check_switch WINDOWS_RELEASE_ENABLED "${WINDOWS_RELEASE_ENABLED}"
           check_switch LINUX_RELEASE_ENABLED "${LINUX_RELEASE_ENABLED}"
           check_switch HOMEBREW_PUBLISH_ENABLED "${HOMEBREW_PUBLISH_ENABLED}"
+          check_switch FLATPAK_PUBLISH_ENABLED "${FLATPAK_PUBLISH_ENABLED}"
           check_switch SCOOP_PUBLISH_ENABLED "${SCOOP_PUBLISH_ENABLED}"
           check_switch AUR_PUBLISH_ENABLED "${AUR_PUBLISH_ENABLED}"
           check_switch WINGET_PUBLISH_ENABLED "${WINGET_PUBLISH_ENABLED}"
@@ -140,6 +147,13 @@ jobs:
             echo "AUR_PUBLISH_ENABLED=true requires LINUX_RELEASE_ENABLED=true" >&2
             exit 1
           fi
+          if [[
+            "${FLATPAK_PUBLISH_ENABLED}" == "true" &&
+            "${LINUX_RELEASE_ENABLED}" != "true"
+          ]]; then
+            echo "FLATPAK_PUBLISH_ENABLED=true requires LINUX_RELEASE_ENABLED=true" >&2
+            exit 1
+          fi
 
           if [[ "${MACOS_RELEASE_ENABLED}" == "true" ]]; then
             require_secret APPLE_CERTIFICATE "${APPLE_CERTIFICATE}"
@@ -152,6 +166,11 @@ jobs:
           if [[ "${prerelease}" == "false" ]]; then
             if [[ "${HOMEBREW_PUBLISH_ENABLED}" == "true" ]]; then
               require_secret HOMEBREW_TAP_TOKEN "${HOMEBREW_TAP_TOKEN}"
+            fi
+            if [[ "${FLATPAK_PUBLISH_ENABLED}" == "true" ]]; then
+              require_secret FLATPAK_REPOSITORY_TOKEN "${FLATPAK_REPOSITORY_TOKEN}"
+              require_secret FLATPAK_GPG_KEY_ID "${FLATPAK_GPG_KEY_ID}"
+              require_secret FLATPAK_GPG_PRIVATE_KEY "${FLATPAK_GPG_PRIVATE_KEY}"
             fi
             if [[ "${SCOOP_PUBLISH_ENABLED}" == "true" ]]; then
               require_secret SCOOP_BUCKET_TOKEN "${SCOOP_BUCKET_TOKEN}"
@@ -169,6 +188,7 @@ jobs:
           echo "windows_enabled=${WINDOWS_RELEASE_ENABLED}" >> "${GITHUB_OUTPUT}"
           echo "linux_enabled=${LINUX_RELEASE_ENABLED}" >> "${GITHUB_OUTPUT}"
           echo "homebrew_enabled=${HOMEBREW_PUBLISH_ENABLED}" >> "${GITHUB_OUTPUT}"
+          echo "flatpak_publish_enabled=${FLATPAK_PUBLISH_ENABLED}" >> "${GITHUB_OUTPUT}"
           echo "scoop_enabled=${SCOOP_PUBLISH_ENABLED}" >> "${GITHUB_OUTPUT}"
           echo "aur_enabled=${AUR_PUBLISH_ENABLED}" >> "${GITHUB_OUTPUT}"
           echo "winget_enabled=${WINGET_PUBLISH_ENABLED}" >> "${GITHUB_OUTPUT}"
@@ -179,6 +199,7 @@ jobs:
             "  Windows: ${WINDOWS_RELEASE_ENABLED}" \
             "  Linux:   ${LINUX_RELEASE_ENABLED}" \
             "  Homebrew (stable only): ${HOMEBREW_PUBLISH_ENABLED}" \
+            "  Flatpak repo (stable only): ${FLATPAK_PUBLISH_ENABLED}" \
             "  Scoop (stable only):    ${SCOOP_PUBLISH_ENABLED}" \
             "  AUR (stable only):      ${AUR_PUBLISH_ENABLED}" \
             "  WinGet (stable only):   ${WINGET_PUBLISH_ENABLED}"
@@ -259,12 +280,24 @@ jobs:
       contents: read
       id-token: write
 
+  build-flatpak:
+    needs: metadata
+    if: ${{ needs.metadata.outputs.release_enabled == 'true' && needs.metadata.outputs.linux_enabled == 'true' }}
+    uses: ./.github/workflows/build-flatpak.yml
+    with:
+      version: ${{ needs.metadata.outputs.version }}
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+
   github-release:
     needs:
       - metadata
       - build-macos
       - build-windows
       - build-linux
+      - build-flatpak
     if: >-
       ${{
         always() &&
@@ -272,7 +305,8 @@ jobs:
         needs.metadata.outputs.release_enabled == 'true' &&
         (needs.build-macos.result == 'success' || needs.build-macos.result == 'skipped') &&
         (needs.build-windows.result == 'success' || needs.build-windows.result == 'skipped') &&
-        (needs.build-linux.result == 'success' || needs.build-linux.result == 'skipped')
+        (needs.build-linux.result == 'success' || needs.build-linux.result == 'skipped') &&
+        (needs.build-flatpak.result == 'success' || needs.build-flatpak.result == 'skipped')
       }}
     runs-on: ubuntu-22.04
     permissions:
@@ -331,6 +365,19 @@ jobs:
       - github-release
     if: ${{ needs.metadata.outputs.prerelease != 'true' && needs.metadata.outputs.homebrew_enabled == 'true' }}
     uses: ./.github/workflows/publish-homebrew.yml
+    with:
+      version: ${{ needs.metadata.outputs.version }}
+      tag: ${{ needs.metadata.outputs.tag }}
+    secrets: inherit
+    permissions:
+      contents: read
+
+  publish-flatpak:
+    needs:
+      - metadata
+      - github-release
+    if: ${{ needs.metadata.outputs.prerelease != 'true' && needs.metadata.outputs.flatpak_publish_enabled == 'true' }}
+    uses: ./.github/workflows/publish-flatpak.yml
     with:
       version: ${{ needs.metadata.outputs.version }}
       tag: ${{ needs.metadata.outputs.tag }}

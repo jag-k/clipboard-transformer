@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright 2026 jag-k -->
+<component type="desktop-application">
+  <id>dev.jag_k.clipboard_transformer</id>
+  <name>Clipboard Transformer</name>
+  <summary>Transform clipboard content with configurable rules</summary>
+  <developer id="dev.jag_k">
+    <name>jag-k</name>
+  </developer>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MPL-2.0</project_license>
+  <description>
+    <p>
+      Clipboard Transformer watches the desktop clipboard and applies ordered,
+      configurable rules to text, URLs, and structured clipboard formats.
+    </p>
+    <p>
+      It runs in the system tray, supports undo and actionable notifications,
+      and includes a command-line interface for explicit transformations and
+      diagnostics.
+    </p>
+  </description>
+  <url type="homepage">https://github.com/jag-k/clipboard-transformer</url>
+  <url type="bugtracker">https://github.com/jag-k/clipboard-transformer/issues</url>
+  <launchable type="desktop-id">dev.jag_k.clipboard_transformer.desktop</launchable>
+  <provides>
+    <binary>clipboard-transformer</binary>
+    <binary>clipboard-transformer-app</binary>
+  </provides>
+  <content_rating type="oars-1.1" />
+  <releases>
+    <release version="0.1.3" date="2026-07-31" />
+  </releases>
+</component>

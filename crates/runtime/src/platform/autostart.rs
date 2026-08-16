@@ -20,6 +20,9 @@ pub enum AutostartStatus {
 }
 
 pub fn status() -> AutostartStatus {
+    if running_in_flatpak() {
+        return AutostartStatus::Unsupported;
+    }
     if !AutoLaunch::is_support() {
         return AutostartStatus::Unsupported;
     }
@@ -33,6 +36,9 @@ pub fn status() -> AutostartStatus {
 }
 
 pub fn enable(executable: &Path) -> Result<()> {
+    if running_in_flatpak() {
+        anyhow::bail!("autostart is unavailable inside Flatpak; use the desktop environment's startup settings");
+    }
     if !AutoLaunch::is_support() {
         anyhow::bail!("autostart is unsupported on this platform");
     }
@@ -50,6 +56,9 @@ pub fn enable_current() -> Result<()> {
 }
 
 pub fn disable() -> Result<()> {
+    if running_in_flatpak() {
+        anyhow::bail!("autostart is unavailable inside Flatpak; use the desktop environment's startup settings");
+    }
     if !AutoLaunch::is_support() {
         anyhow::bail!("autostart is unsupported on this platform");
     }
@@ -70,6 +79,14 @@ fn current_launcher_executable() -> Result<std::path::PathBuf> {
         }
     }
     std::env::current_exe().context("resolve current executable")
+}
+
+fn running_in_flatpak() -> bool {
+    cfg!(target_os = "linux") && identifies_flatpak(std::env::var_os("FLATPAK_ID").as_deref())
+}
+
+fn identifies_flatpak(value: Option<&std::ffi::OsStr>) -> bool {
+    value.is_some_and(|value| !value.is_empty())
 }
 
 fn launcher(executable: &Path) -> Result<AutoLaunch> {
@@ -126,5 +143,14 @@ mod tests {
             format!("\"{}\"", executable.to_str().unwrap())
         );
         assert!(launcher.get_args().is_empty());
+    }
+
+    #[test]
+    fn flatpak_requires_a_non_empty_application_id() {
+        assert!(!identifies_flatpak(None));
+        assert!(!identifies_flatpak(Some(std::ffi::OsStr::new(""))));
+        assert!(identifies_flatpak(Some(std::ffi::OsStr::new(
+            "dev.jag_k.clipboard_transformer"
+        ))));
     }
 }

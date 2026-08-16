@@ -33,10 +33,15 @@ runs:
         linux_packager_version="$(
           sed -nE 's/^version = "([^"]+)"$/\1/p' package/linux/Packager.toml
         )"
+        flatpak_version="$(
+          sed -nE 's/.*<release version="([^"]+)" date="[^"]+".*/\1/p' \
+            package/flatpak/dev.jag_k.clipboard_transformer.metainfo.xml
+        )"
         if [[ "${version}" != "${cargo_version}" \
           || "${version}" != "${packager_version}" \
-          || "${version}" != "${linux_packager_version}" ]]; then
-          echo "Release (${version}), Cargo.toml (${cargo_version}), Packager.toml (${packager_version}), and Linux Packager.toml (${linux_packager_version}) versions must match" >&2
+          || "${version}" != "${linux_packager_version}" \
+          || "${version}" != "${flatpak_version}" ]]; then
+          echo "Release (${version}), Cargo.toml (${cargo_version}), Packager.toml (${packager_version}), Linux Packager.toml (${linux_packager_version}), and Flatpak metadata (${flatpak_version}) versions must match" >&2
           exit 1
         fi
         if [[ -n "${INFO_PLIST}" ]]; then

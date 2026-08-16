@@ -8,7 +8,7 @@ runtime tests. Validation depth differs by platform and desktop environment.
 | --- | --- | --- |
 | macOS 13+ | AppKit, UserNotifications, `SMAppService` | Primary development environment. |
 | Windows 10/11 | Win32 tray and clipboard, toast activation | MSI and portable artifacts are published but are not Authenticode-signed yet. |
-| Linux | X11/XWayland or data-control Wayland, portal notifications, StatusNotifierItem | Session capability varies by compositor; run `doctor`. |
+| Linux | X11/XWayland or data-control Wayland, portal notifications, StatusNotifierItem | Session capability varies by compositor; run `doctor`. Flatpak keeps host files and commands sandboxed. |
 
 Support is best effort across OS versions, distributions, desktop
 environments, compositors, and packaging systems. Actionable reports may need

@@ -1,0 +1,3 @@
+[D-BUS Service]
+Name=dev.jag-k.clipboard-transformer
+Exec=/app/bin/clipboard-transformer-app --gapplication-service

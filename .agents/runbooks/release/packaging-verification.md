@@ -20,6 +20,8 @@ root. `releasing.md` describes what the release pipeline produces;
 | WinGet manifest | `publish-winget.yml` (wingetcreate against the MSI) | Windows VM |
 | Linux AppImage, DEB, Pacman/PKGBUILD | `just package-linux` / `build-linux-packages.yml` | matching Linux VM |
 | Linux RPM | `just package-linux-rpm` / `build-linux-packages.yml` | Fedora/openSUSE VM |
+| Linux Flatpak bundle | `just package-flatpak` / `build-flatpak.yml` | Flatpak-enabled Linux desktop |
+| Nix Linux/macOS package | `nix build` / `nix.yml` | Linux and macOS CI |
 | Release orchestration | `release.yml` (tag-driven) | CI only |
 
 ## macOS: fully local
@@ -207,9 +209,49 @@ GNOME/XWayland bridging, and a compositor exposing native data-control. A
 Wayland session with neither data-control nor XWayland must show the fatal
 notification and leave no watcher process running.
 
+Build the Flatpak bundle after adding Flathub as a runtime remote:
+
+```sh
+flatpak remote-add --user --if-not-exists flathub \
+  https://flathub.org/repo/flathub.flatpakrepo
+just package-flatpak
+flatpak install --user ./target/clipboard-transformer-*.flatpak
+flatpak run dev.jag_k.clipboard_transformer
+```
+
+Verify X11, native data-control Wayland, the tray, notification actions, URL
+imports, and sandbox-local config. Confirm that the autostart action is absent
+and that a `shell` rule cannot silently invoke an arbitrary host executable.
+
+After bootstrapping `jag-k/flatpak-repo`, test repository publication with a
+stable release asset and the manual workflow:
+
+```sh
+version=0.1.3 # replace with a release that contains the Flatpak bundle
+gh workflow run publish-flatpak.yml -f version="$version" -f tag="v$version"
+flatpak remote-add --user --if-not-exists jag-k \
+  https://jag-k.github.io/flatpak-repo/jag-k.flatpakrepo
+flatpak remote-ls jag-k
+flatpak install --user jag-k dev.jag_k.clipboard_transformer
+```
+
+Verify that the remote summary and application ref are GPG-verified. Publish a
+new test version and confirm `flatpak update` advances an existing installation
+without re-adding the remote.
+
+Build the Nix package on both Linux and macOS:
+
+```sh
+nix build --print-build-logs .#default
+result/bin/clipboard-transformer --version
+```
+
+On macOS also launch `result/Applications/Clipboard Transformer.app`; on Linux
+run `result/bin/clipboard-transformer doctor` in the graphical session.
+
 ## CI without publishing
 
-All three build workflows accept `workflow_dispatch` in addition to
+All four build workflows accept `workflow_dispatch` in addition to
 `workflow_call`, so each one runs on its own without the release job and without
 a temporary wrapper workflow:
 
@@ -217,6 +259,7 @@ a temporary wrapper workflow:
 gh workflow run build-macos-packages.yml -f version=0.1.0
 gh workflow run build-windows-msi.yml -f version=0.1.0
 gh workflow run build-linux-packages.yml -f version=0.1.0
+gh workflow run build-flatpak.yml -f version=0.1.0
 ```
 
 Run them from the Actions tab or as above; download signed/notarized/attested

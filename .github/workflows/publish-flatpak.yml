@@ -1,0 +1,144 @@
+name: Publish Flatpak repository
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+      tag:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Stable version whose Flatpak artifact should be published
+        required: true
+        type: string
+      tag:
+        description: GitHub Release tag containing the Flatpak bundle
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  publish-flatpak:
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-25.08
+      options: --privileged
+    env:
+      APP_ID: dev.jag_k.clipboard_transformer
+      FLATPAK_GPG_KEY_ID: ${{ secrets.FLATPAK_GPG_KEY_ID }}
+      FLATPAK_GPG_PRIVATE_KEY: ${{ secrets.FLATPAK_GPG_PRIVATE_KEY }}
+      FLATPAK_REPOSITORY_TOKEN: ${{ secrets.FLATPAK_REPOSITORY_TOKEN }}
+      REPOSITORY_URL: https://flatpak.jag-k.dev/
+      TAG: ${{ inputs.tag }}
+      VERSION: ${{ inputs.version }}
+    steps:
+      - name: Check publishing credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in \
+            FLATPAK_GPG_KEY_ID \
+            FLATPAK_GPG_PRIVATE_KEY \
+            FLATPAK_REPOSITORY_TOKEN; do
+            if [[ -z "${!name}" ]]; then
+              echo "${name} is required for Flatpak repository publication" >&2
+              exit 1
+            fi
+          done
+
+      - name: Checkout source
+        uses: actions/checkout@v6
+        with:
+          path: source
+          persist-credentials: false
+
+      - name: Checkout shared Flatpak repository
+        uses: actions/checkout@v6
+        with:
+          repository: jag-k/flatpak-repo
+          token: ${{ secrets.FLATPAK_REPOSITORY_TOKEN }}
+          path: site
+          persist-credentials: true
+
+      - name: Download Flatpak bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle="clipboard-transformer-${VERSION}-x86_64.flatpak"
+          mkdir -p bundles
+          curl --fail --location --silent --show-error \
+            "https://github.com/jag-k/clipboard-transformer/releases/download/${TAG}/${bundle}" \
+            --output "bundles/${bundle}"
+
+      - name: Import signing key
+        shell: bash
+        run: |
+          set -euo pipefail
+          gpg_home="${RUNNER_TEMP}/flatpak-gnupg"
+          install -d -m 0700 "${gpg_home}"
+          printf '%s\n' "${FLATPAK_GPG_PRIVATE_KEY}" \
+            > "${RUNNER_TEMP}/flatpak-private-key.asc"
+          gpg --batch --homedir "${gpg_home}" \
+            --import "${RUNNER_TEMP}/flatpak-private-key.asc"
+          gpg --batch --homedir "${gpg_home}" \
+            --list-secret-keys "${FLATPAK_GPG_KEY_ID}"
+          echo "GPG_HOME=${gpg_home}" >> "${GITHUB_ENV}"
+
+      - name: Update signed repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle="$(find bundles -type f -name '*.flatpak' -print -quit)"
+          if [[ -z "${bundle}" ]]; then
+            echo "Flatpak bundle artifact is missing" >&2
+            exit 1
+          fi
+
+          repository="site/repo"
+          if [[ ! -f "${repository}/config" ]]; then
+            ostree init --repo="${repository}" --mode=archive-z2
+          fi
+          flatpak build-import-bundle --update-appstream \
+            "${repository}" "${bundle}"
+          flatpak build-sign \
+            --gpg-homedir="${GPG_HOME}" \
+            --gpg-sign="${FLATPAK_GPG_KEY_ID}" \
+            "${repository}" "${APP_ID}" stable x86_64
+          flatpak build-update-repo \
+            --generate-static-deltas \
+            --prune \
+            --gpg-homedir="${GPG_HOME}" \
+            --gpg-sign="${FLATPAK_GPG_KEY_ID}" \
+            "${repository}"
+
+          public_key="$(
+            gpg --batch --homedir "${GPG_HOME}" \
+              --export "${FLATPAK_GPG_KEY_ID}" | base64 --wrap=0
+          )"
+          source/package/flatpak/write-repository-descriptors.sh \
+            site "${REPOSITORY_URL}" "${public_key}"
+
+      - name: Commit repository update
+        working-directory: site
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add --all \
+            .nojekyll \
+            clipboard-transformer.flatpakref \
+            jag-k.flatpakrepo \
+            repo
+          if git diff --cached --quiet; then
+            echo "Flatpak repository already contains ${VERSION}"
+            exit 0
+          fi
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git commit -m "clipboard-transformer ${VERSION}"
+          git push

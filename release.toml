@@ -52,19 +52,9 @@ prerelease = true
 
 
 [[pre-release-replacements]]
-file = "../../README.md"
-search = '(?m)^Manual downloads for \*\*v[^*]+\*\*:'
-replace = 'Manual downloads for **v{{version}}**:'
-
-[[pre-release-replacements]]
-file = "../../README.md"
-search = 'releases/download/v[^/]+/(clipboard-transformer(?:-app|-cli)?[-_])\d+\.\d+\.\d+'
-replace = 'releases/download/v{{version}}/${1}{{version}}'
-
-[[pre-release-replacements]]
 file = "../../docs/install.md"
-search = '(?m)^## Manual downloads \(v[^)]+\)'
-replace = '## Manual downloads (v{{version}})'
+search = '(?m)^Direct links below target \*\*v[^*]+\*\*\.'
+replace = 'Direct links below target **v{{version}}**.'
 
 [[pre-release-replacements]]
 file = "../../docs/install.md"
@@ -83,6 +73,13 @@ prerelease = true
 file = "../../package/linux/Packager.toml"
 search = '(?m)^version = "[^"]+"$'
 replace = 'version = "{{version}}"'
+exactly = 1
+prerelease = true
+
+[[pre-release-replacements]]
+file = "../../package/flatpak/dev.jag_k.clipboard_transformer.metainfo.xml"
+search = '<release version="[^"]+" date="[^"]+" />'
+replace = '<release version="{{version}}" date="{{date}}" />'
 exactly = 1
 prerelease = true
 

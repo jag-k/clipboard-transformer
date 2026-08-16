@@ -29,6 +29,7 @@ verification.
 | macOS arm64/x86_64 | signed, notarized `.dmg` | cargo-packager + custom macOS job | GitHub release workflow | published; DMG ticket stapled |
 | macOS arm64/x86_64 | Homebrew ZIP containing `.app` plus standalone CLI | custom macOS job | GitHub release workflow | published; contains the separately notarized CLI bytes |
 | Homebrew | cask installing the macOS `.app` plus CLI, or the Linux x86_64 AppImage plus CLI | release workflow | `jag-k/homebrew-tap` | published; Linux install still needs validation |
+| Flatpak remote | signed OSTree repository shared by current and future jag-k applications | release workflow | `jag-k/flatpak-repo` via GitHub Pages | prepared; enable after repository and signing-key bootstrap |
 | Windows x86_64 | portable `clipboard-transformer-cli-<version>-x86_64.exe` CLI | Cargo/custom job | GitHub release workflow | published; unsigned |
 | Windows x86_64 | portable `clipboard-transformer-app-<version>-x86_64.exe` GUI | Cargo/custom job | GitHub release workflow | published; unsigned |
 | Windows x86_64 | portable ZIP containing GUI, CLI, and icon | Cargo/custom job | GitHub release workflow | published; unsigned |
@@ -136,10 +137,26 @@ the published artifacts as incompletely validated until installed packages
 pass the platform checklist in real X11, GNOME XWayland-bridge, native
 data-control Wayland, Xubuntu, and SteamOS sessions.
 
+`.github/workflows/build-flatpak.yml` generates the Cargo source list from the
+locked dependency graph, then independently builds the offline Flatpak
+manifest and adds a single-file bundle to every Linux-enabled GitHub Release.
+The bundle uses Flathub's Freedesktop runtime but the
+application itself is not published on Flathub. For stable releases,
+`.github/workflows/publish-flatpak.yml` can import that bundle into the shared,
+signed `jag-k/flatpak-repo` remote and publish it through GitHub Pages. The
+sandbox exposes X11,
+Wayland, network access, the StatusNotifier watcher, and only the D-Bus names
+needed by the current tray and notification activation implementation. It does
+not expose host files or host executables, and autostart is disabled in-app.
+
 For additional discovery, AppImageHub is the lowest-maintenance next channel:
 it indexes the existing GitHub-hosted AppImage and does not add another build.
-An upstream Nixpkgs submission is useful after a project-owned flake proves the
-runtime dependencies and desktop integration on NixOS.
+The project-owned `flake.nix` builds app and CLI outputs on Linux and macOS,
+including a Darwin `.app` bundle. It can be installed directly from GitHub,
+and successful project CI builds are pushed to the public `jag-k` Cachix
+binary cache. An upstream nixpkgs submission is still useful after real NixOS
+and macOS validation because that adds catalog discovery and official
+binary-cache builds.
 
 PPA, COPR, and OBS are build services rather than metadata-only catalogs like
 AUR. They do not simply ingest the current binary DEB/RPM:
@@ -157,12 +174,15 @@ Vendor Cargo dependencies for deterministic remote builds and verify that each
 builder can satisfy the workspace's declared Rust version. See
 `linux-catalogs.md` for the concrete bootstrap and automation plan.
 
-Do not plan a Flathub submission under the current application shape. Its
-inclusion policy explicitly rejects tray-only applications and host system
-utilities, while Clipboard Transformer also needs global clipboard access that
-does not map cleanly to the Flatpak sandbox. A Snap would face similar access
-pressure and would likely require manually approved classic confinement, so it
-is lower priority than the native artifacts already published.
+Do not automate or prepare a Flathub submission under the current policy. The
+[inclusion policy](https://docs.flathub.org/docs/for-app-authors/requirements)
+rejects tray-only applications and host system utilities, and its generative-AI
+policy prohibits AI-assisted application content and submission materials
+absent a reviewer-granted exception. The project can still test and publish
+its own Flatpak bundle on GitHub. A Snap
+would face similar host-access pressure and would likely require manually
+approved classic confinement, so it remains lower priority than the native
+artifacts already published.
 
 ## Required release configuration
 

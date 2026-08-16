@@ -41,6 +41,8 @@ macos_icon_dir := "assets/generated/macos"
 windows_icon_dir := "assets/generated/windows"
 linux_icon_dir := "assets/generated/linux"
 linux_packager_config := "package/linux/Packager.toml"
+flatpak_manifest := "package/flatpak/dev.jag_k.clipboard_transformer.json"
+flatpak_app_id := "dev.jag_k.clipboard_transformer"
 macos_packager_config := if env_var_or_default("APPLE_SIGNING_IDENTITY", "") == "" { "Packager.toml" } else { "Packager.local.toml" }
 bin := "clipboard-transformer"
 app_bin := "clipboard-transformer-app"
@@ -205,6 +207,12 @@ gen-icons *args:
 [group('gen')]
 gen-config-schema:
     cargo run --locked --bin {{ bin }} -- schema --output {{ quote(schema_file) }}
+
+[doc('Generate the ignored Flatpak Cargo source list from Cargo.lock')]
+[group('gen')]
+[unix]
+gen-flatpak-sources:
+    package/flatpak/update-cargo-sources.sh
 
 [arg('force', long='force', value='true')]
 [doc('Compile AppIcon.icon into macOS/Linux/Windows icon assets')]
@@ -488,6 +496,35 @@ package-linux: (_package-linux "--formats deb --formats appimage --formats pacma
     cargo generate-rpm -p apps/desktop
     @echo "target/packager"
     @echo "target/generate-rpm"
+
+[group('linux')]
+[linux]
+[private]
+require-flatpak-builder:
+    #!/usr/bin/env sh
+    set -eu
+    if ! command -v flatpak >/dev/null 2>&1 || ! command -v flatpak-builder >/dev/null 2>&1; then
+      echo "flatpak and flatpak-builder are required." >&2
+      exit 1
+    fi
+
+[doc('Build a local Flatpak bundle (requires the Flathub runtime remote)')]
+[group('linux')]
+[linux]
+package-flatpak: require-flatpak-builder gen-flatpak-sources
+    #!/usr/bin/env bash
+    set -euo pipefail
+    version="$(sed -nE 's/^version = "([^"]+)"$/\1/p' Cargo.toml | head -n 1)"
+    build_dir="target/flatpak-build"
+    repo_dir="target/flatpak-repo"
+    bundle="target/clipboard-transformer-${version}-$(uname -m).flatpak"
+    rm -rf "$build_dir" "$repo_dir"
+    flatpak-builder --user --force-clean --install-deps-from=flathub \
+      --default-branch=stable --repo="$repo_dir" \
+      "$build_dir" {{ quote(flatpak_manifest) }}
+    flatpak build-bundle "$repo_dir" "$bundle" {{ quote(flatpak_app_id) }} stable
+    sha256sum "$bundle" > "$bundle.sha256"
+    echo "$bundle"
 
 # Windows artifacts (run on Windows) ---------------------------------------------
 

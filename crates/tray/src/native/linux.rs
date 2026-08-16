@@ -78,11 +78,16 @@ impl LinuxTray {
             commands,
             menu: menu_source,
         }
+        .disable_dbus_name(running_in_flatpak())
         .spawn()
         .context("start native Linux StatusNotifierItem tray")?;
         log::info!("native Linux StatusNotifierItem tray initialized");
         Ok(Self { handle })
     }
+}
+
+fn running_in_flatpak() -> bool {
+    std::env::var_os("FLATPAK_ID").is_some_and(|id| !id.is_empty())
 }
 
 impl Drop for LinuxTray {

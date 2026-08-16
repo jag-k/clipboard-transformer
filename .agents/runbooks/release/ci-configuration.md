@@ -29,20 +29,22 @@ implicit default.
 | `RELEASE_ENABLED` | Master switch. `false` validates the tag and then skips every build, GitHub Release, and catalog update. |
 | `MACOS_RELEASE_ENABLED` | Signed and notarized macOS artifacts |
 | `WINDOWS_RELEASE_ENABLED` | MSI and portable Windows artifacts |
-| `LINUX_RELEASE_ENABLED` | Linux CLI archive, Homebrew AppImage + CLI bundle, AppImage, `.deb`, Pacman package plus `PKGBUILD`, and `.rpm` artifacts |
+| `LINUX_RELEASE_ENABLED` | Linux CLI archive, Flatpak bundle, Homebrew AppImage + CLI bundle, AppImage, `.deb`, Pacman package plus `PKGBUILD`, and `.rpm` artifacts |
 | `HOMEBREW_PUBLISH_ENABLED` | Homebrew cask update for a stable release |
+| `FLATPAK_PUBLISH_ENABLED` | Signed update to the shared `jag-k/flatpak-repo` repository for a stable release |
 | `SCOOP_PUBLISH_ENABLED` | Scoop manifest update for a stable release |
 | `AUR_PUBLISH_ENABLED` | AUR repository updates for a stable release |
 | `WINGET_PUBLISH_ENABLED` | WinGet submission for a stable release |
 
 When `RELEASE_ENABLED=false`, the other switches and release credentials are
-not required. When it is `true`, all seven subordinate switches must be set
+not required. When it is `true`, all eight subordinate switches must be set
 explicitly and at least one platform must be enabled.
 
 The preflight job validates the complete configuration before starting any
 platform runner:
 
 - Homebrew requires the macOS build;
+- Flatpak repository publication requires the Linux build;
 - Scoop and WinGet require the Windows build;
 - AUR requires the Linux build;
 - an enabled macOS build requires all Apple signing and notarization secrets;
@@ -62,6 +64,19 @@ catalogs even if their switches are `true`.
 `GITHUB_TOKEN` is created automatically for each workflow run. Do not create a
 secret with this name. The workflows grant it only the job-specific permissions
 needed to read source, upload attestations, and create the GitHub Release.
+
+## Nix binary cache
+
+The `Nix` workflow builds the project flake on Linux, Apple Silicon macOS, and
+Intel macOS. It reads from the public `jag-k` Cachix cache and pushes successful
+build outputs so users can install matching flake revisions without compiling
+the application locally.
+
+Create a per-cache token for the public `jag-k` cache with write permission and
+store it as `CACHIX_AUTH_TOKEN`. The public cache URL and signing key belong in
+`flake.nix`; the token belongs only in GitHub Actions secrets. Pull-request
+runs use the cache read-only; pushes to `main` and manual workflow runs publish
+successful outputs.
 
 ## macOS signing and notarization secrets
 
@@ -113,6 +128,36 @@ with:
 Store it as `SCOOP_BUCKET_TOKEN`, then set `SCOOP_PUBLISH_ENABLED=true`.
 Keep it `false` until the bucket has been bootstrapped and the token has been
 tested. Scoop publication also requires `WINDOWS_RELEASE_ENABLED=true`.
+
+## Shared Flatpak repository
+
+Create a public `jag-k/flatpak-repo` repository with an initial commit on its
+default branch. Configure GitHub Pages to deploy from the root of that branch;
+the resulting base URL must be `https://jag-k.github.io/flatpak-repo/`.
+The repository is shared: future applications add refs to the same OSTree
+repository and use the same `jag-k.flatpakrepo` remote descriptor.
+
+Create a dedicated GPG signing key for this repository. A non-expiring primary
+identity with a replaceable signing subkey is preferable; the CI signing key
+must be usable non-interactively. Record its full fingerprint, keep an offline
+backup and revocation certificate, and export only the CI signing material to
+GitHub Actions. Store:
+
+| Secret | Value |
+| --- | --- |
+| `FLATPAK_GPG_KEY_ID` | Full fingerprint of the repository signing key |
+| `FLATPAK_GPG_PRIVATE_KEY` | ASCII-armored private key accepted by `gpg --import` |
+
+Create a fine-grained GitHub personal access token scoped only to
+`jag-k/flatpak-repo`, with **Contents — Read and write**, and store it as
+`FLATPAK_REPOSITORY_TOKEN`.
+
+The stable release workflow downloads the already-published `.flatpak` bundle,
+imports it into `repo/`, signs the application ref and repository summary,
+generates static deltas, and commits `jag-k.flatpakrepo` plus the application's
+`.flatpakref`. Set `FLATPAK_PUBLISH_ENABLED=true` only after the repository,
+Pages deployment, token, and signing-key backup have been verified. Publication
+also requires `LINUX_RELEASE_ENABLED=true`.
 
 ## Arch User Repository
 
@@ -228,6 +273,7 @@ After the first manifest is accepted, set `WINGET_PUBLISH_ENABLED=true`. Keep it
 | `WINDOWS_RELEASE_ENABLED` | Variable | `RELEASE_ENABLED=true` |
 | `LINUX_RELEASE_ENABLED` | Variable | `RELEASE_ENABLED=true` |
 | `HOMEBREW_PUBLISH_ENABLED` | Variable | `RELEASE_ENABLED=true` |
+| `FLATPAK_PUBLISH_ENABLED` | Variable | `RELEASE_ENABLED=true` |
 | `SCOOP_PUBLISH_ENABLED` | Variable | `RELEASE_ENABLED=true` |
 | `AUR_PUBLISH_ENABLED` | Variable | `RELEASE_ENABLED=true` |
 | `WINGET_PUBLISH_ENABLED` | Variable | `RELEASE_ENABLED=true` |
@@ -237,6 +283,9 @@ After the first manifest is accepted, set `WINGET_PUBLISH_ENABLED=true`. Keep it
 | `APPLE_API_KEY_ID` | Secret | `MACOS_RELEASE_ENABLED=true` |
 | `APPLE_API_ISSUER_ID` | Secret | `MACOS_RELEASE_ENABLED=true` |
 | `HOMEBREW_TAP_TOKEN` | Secret | Stable tag and `HOMEBREW_PUBLISH_ENABLED=true` |
+| `FLATPAK_REPOSITORY_TOKEN` | Secret | Stable tag and `FLATPAK_PUBLISH_ENABLED=true` |
+| `FLATPAK_GPG_KEY_ID` | Secret | Stable tag and `FLATPAK_PUBLISH_ENABLED=true` |
+| `FLATPAK_GPG_PRIVATE_KEY` | Secret | Stable tag and `FLATPAK_PUBLISH_ENABLED=true` |
 | `SCOOP_BUCKET_TOKEN` | Secret | Stable tag and `SCOOP_PUBLISH_ENABLED=true` |
 | `AUR_SSH_PRIVATE_KEY` | Secret | Stable tag and `AUR_PUBLISH_ENABLED=true` |
 | `WINGET_CREATE_GITHUB_TOKEN` | Secret | Stable tag and `WINGET_PUBLISH_ENABLED=true` |
@@ -249,6 +298,7 @@ MACOS_RELEASE_ENABLED=false
 WINDOWS_RELEASE_ENABLED=true
 LINUX_RELEASE_ENABLED=false
 HOMEBREW_PUBLISH_ENABLED=false
+FLATPAK_PUBLISH_ENABLED=false
 SCOOP_PUBLISH_ENABLED=false
 AUR_PUBLISH_ENABLED=false
 WINGET_PUBLISH_ENABLED=false

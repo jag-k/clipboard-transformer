@@ -1,9 +1,10 @@
 # Linux catalog expansion
 
-The project currently publishes native DEB, RPM, Pacman, AppImage, portable
-CLI, AUR source and binary packages, plus a Homebrew cask that supports both
-macOS and Linux. The direct DEB/RPM files are installable packages, not
-automatically updating APT or DNF repositories.
+The project currently publishes native DEB, RPM, Pacman, AppImage and Flatpak
+bundles, a portable CLI, AUR source and binary packages, plus a Homebrew cask
+that supports both macOS and Linux. It also exposes a GitHub-hosted Nix flake.
+The direct DEB/RPM/Flatpak files are installable packages, not automatically
+updating APT, DNF, Flathub, or nixpkgs repositories.
 
 Homebrew is one cross-platform channel:
 
@@ -13,6 +14,72 @@ brew install --cask jag-k/tap/clipboard-transformer
 
 On macOS it installs the native app and CLI. On Linux x86_64 it installs the
 AppImage and CLI.
+
+## Flatpak and Flathub are separate
+
+`package/flatpak/` is a real offline flatpak-builder source. The release
+workflow produces an installable `.flatpak` bundle backed by the Flathub
+Freedesktop runtime, but does not publish the application to Flathub. Stable
+releases can instead update the shared, signed `jag-k/flatpak-repo` remote on
+GitHub Pages. That repository may contain refs for multiple applications.
+
+Current Flathub policy is a product gate, not a missing CI token: it rejects
+tray-only applications and system utilities. For new submissions, its AI
+policy also prohibits applications containing AI-generated or AI-assisted
+code, documentation, or other content, as well as AI-generated submission
+material. The policy is not retroactive for applications accepted before it
+was introduced, and Flathub may grant exceptions to mature, well-maintained
+projects. Do not open or automate a submission from this repository while
+these restrictions apply. A separately
+hosted Flatpak repository provides automatic updates without implying Flathub
+acceptance or discovery in Flathub's catalog.
+
+## Nix and nixpkgs are separate
+
+Users can install the project flake directly with:
+
+```sh
+nix profile install github:jag-k/clipboard-transformer
+```
+
+This supports Linux and macOS. Successful project CI builds are pushed to the
+public `jag-k` Cachix binary cache, so matching installations download the
+prebuilt output and only cache misses build locally. Nixpkgs is the community
+package catalog shown by `search.nixos.org` and backed by the official cache;
+it requires a separate upstream package contribution and review. Keep that
+future contribution human-authored and test the project flake on NixOS and
+both Darwin architectures first.
+
+The flake declares the cache URL and public signing key. A multi-user Nix
+daemon may reject client-specified substituters from an untrusted user; enable
+the cache once with `nix run nixpkgs#cachix -- use jag-k` or declare the same
+substituter and key through NixOS/nix-darwin system configuration.
+
+Nixpkgs 26.05 is the final maintained release for `x86_64-darwin`; 26.11 drops
+that platform. The project flake therefore pins only Intel macOS to
+`nixpkgs-26.05-darwin` through its dedicated input while Linux and
+`aarch64-darwin` follow the normal `nixos-26.05` input. Changing a local
+`nix-channel` does not affect either input or `flake.lock`.
+
+For the upstream contribution:
+
+1. Publish and verify a stable source tag.
+2. Add `pkgs/by-name/cl/clipboard-transformer/package.nix` in a Nixpkgs fork;
+   the expression should fetch that immutable tag, build the CLI and desktop
+   packages, install the Linux desktop metadata and Darwin `.app`, and carry
+   complete `meta` including a maintainer.
+3. Build with Nix sandboxing, run both binaries, launch the GUI on Linux and
+   macOS, and run `nixpkgs-review wip` from the Nixpkgs checkout.
+4. Submit a PR to `NixOS/nixpkgs` using its package checklist and respond to
+   ofborg/reviewer results. Nixpkgs requires a responsible human to review the
+   contribution and disclosure of non-trivial automation or LLM use.
+
+The direct project-flake command remains useful before and after that PR, but
+it does not create a nixpkgs catalog entry:
+
+```sh
+nix profile install github:jag-k/clipboard-transformer
+```
 
 ## Why PPA, COPR, and OBS are more work than AUR
 
@@ -112,7 +179,7 @@ Repology supplies the large packaging-status matrix:
 It compares versions in repositories it indexes. Project-owned Homebrew taps,
 Scoop buckets, and some personal PPA/COPR repositories may not appear, so it
 cannot be the authoritative inventory of every Clipboard Transformer channel.
-Keep the installation matrix in `docs/install.md` as the source of truth.
+Keep the platform sections in `docs/install.md` as the source of truth.
 
 AUR keywords are package-base metadata managed manually in the AUR web UI. The
 single input is whitespace-separated, not comma-separated:

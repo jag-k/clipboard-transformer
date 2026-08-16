@@ -59,14 +59,21 @@ missing requirement. Common fixes are:
 
 ## Install and package formats
 
-The [installation guide](install.md#linux) covers the published AUR packages,
-AppImage, DEB, Pacman, RPM, Homebrew bundle, and portable CLI archive.
+The [installation guide](install.md#linux) covers the published Flatpak bundle,
+project Nix flake, AUR packages, AppImage, DEB, Pacman, RPM, Homebrew bundle,
+and portable CLI archive.
 
 Native packages and both AUR alternatives install the desktop entry, icon,
 public CLI, desktop host, and D-Bus activation metadata used by the support
 action in fatal startup notifications. The AppImage exposes the desktop
 application but does not install system integration or a system CLI; pair it
 with the separate CLI archive when needed.
+
+The Flatpak bundle exposes the same X11 and Wayland sockets because clipboard
+observation is its core function. It keeps configuration and downloaded
+plugins in the application sandbox; host commands and arbitrary host files are
+therefore unavailable to `shell` rules. Flatpak autostart is intentionally not
+offered until the runtime uses the Background portal.
 
 Published packages have passed automated build and content checks. Installed
 package validation is still incomplete across Xubuntu/X11, GNOME with

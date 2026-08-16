@@ -1,39 +1,13 @@
 # Installation
 
 Clipboard Transformer ships a native desktop application and a separate,
-optional `clipboard-transformer` CLI. Download the
-[latest stable release](https://github.com/jag-k/clipboard-transformer/releases/latest)
-when you prefer a manual installation.
+optional `clipboard-transformer` CLI. The desktop application does not require
+the CLI; install it only for terminal pipelines, explicit clipboard commands,
+or diagnostics.
 
-## Manual downloads (v0.1.3)
-
-| Platform | Desktop app | Standalone CLI |
-| --- | --- | --- |
-| macOS, Apple Silicon | [DMG](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-0.1.3-aarch64-apple-darwin.dmg) · [app ZIP](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-0.1.3-aarch64-apple-darwin.app.zip) | [CLI archive](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-cli-0.1.3-aarch64-apple-darwin.tar.xz) |
-| macOS, Intel | [DMG](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-0.1.3-x86_64-apple-darwin.dmg) · [app ZIP](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-0.1.3-x86_64-apple-darwin.app.zip) | [CLI archive](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-cli-0.1.3-x86_64-apple-darwin.tar.xz) |
-| Windows, x86-64 | [MSI, app + CLI](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-0.1.3-x86_64.msi) · [portable app + CLI](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-0.1.3-x86_64-windows-portable.zip) · [app EXE](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-app-0.1.3-x86_64.exe) | [CLI EXE](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-cli-0.1.3-x86_64.exe) |
-| Linux, x86-64 | [AppImage](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-app_0.1.3_x86_64.AppImage) · [DEB](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-app_0.1.3_amd64.deb) · [RPM](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-0.1.3-1.x86_64.rpm) · [Pacman](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-app_0.1.3_x86_64.tar.gz) | [CLI archive](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-cli-0.1.3-x86_64-linux.tar.xz) |
-
-These links target the tagged release directly. The release process updates the
-version in this table and in the README before creating the next tag.
-
-## Which download includes the CLI?
-
-| Platform | Distribution | Desktop app | CLI |
-| --- | --- | :---: | :---: |
-| macOS | Homebrew cask | Yes | Yes |
-| macOS | DMG or `.app.zip` | Yes | No |
-| macOS | `clipboard-transformer-cli-…-apple-darwin.tar.xz` | No | Yes |
-| Windows | MSI | Yes | Yes |
-| Windows | Scoop or portable ZIP | Yes | Yes |
-| Windows | `clipboard-transformer-app-….exe` | Yes | No |
-| Windows | `clipboard-transformer-cli-….exe` | No | Yes |
-| Linux | DEB, RPM, Pacman, AUR, or Homebrew | Yes | Yes |
-| Linux | AppImage | Yes | No system CLI |
-| Linux | `clipboard-transformer-cli-…-linux.tar.xz` | No | Yes |
-
-The desktop application does not require the CLI. Install the CLI only for
-terminal pipelines, explicit clipboard commands, or diagnostics.
+Choose the operating system first. Package managers and update-capable methods
+come before direct release downloads in each section.
+Direct links below target **v0.1.3**.
 
 ## macOS
 
@@ -45,14 +19,45 @@ Homebrew installs both `Clipboard Transformer.app` and the standalone CLI:
 brew install --cask jag-k/tap/clipboard-transformer
 ```
 
-### Manual app installation
+### Nix
 
-From the
-[latest release](https://github.com/jag-k/clipboard-transformer/releases/latest),
-download the DMG matching the Mac:
+The project flake supports Apple Silicon and Intel macOS. It follows Nixpkgs
+26.05 on Apple Silicon and pins Intel macOS to the maintained
+`nixpkgs-26.05-darwin` branch, because Nixpkgs 26.11 drops `x86_64-darwin`.
+Nixpkgs plans to maintain the Intel branch through the end of 2026. The flake
+provides both the menu bar application and CLI:
 
-- `aarch64-apple-darwin.dmg` for Apple Silicon;
-- `x86_64-apple-darwin.dmg` for an Intel Mac.
+```sh
+nix profile install github:jag-k/clipboard-transformer
+nix run github:jag-k/clipboard-transformer
+nix run github:jag-k/clipboard-transformer#cli -- --version
+```
+
+The Nix output includes `Applications/Clipboard Transformer.app`. It is not in
+nixpkgs yet, but successful project CI builds are published to the public
+`jag-k` Cachix binary cache declared by the flake. Nix downloads a matching
+prebuilt output when one is available and falls back to a source build when it
+is not.
+
+Multi-user Nix installations may require enabling the cache once at the daemon
+level before installation:
+
+```sh
+nix run nixpkgs#cachix -- use jag-k
+```
+
+`nix run github:jag-k/clipboard-transformer` opens that application bundle
+with macOS `open` and returns control to the terminal. `nix profile install`
+keeps the bundle under `~/.nix-profile/Applications`; vanilla Nix does not copy
+it into `/Applications`. Tools such as `mac-app-util`, nix-darwin, or Home
+Manager can expose the immutable bundle through managed application symlinks.
+
+### Direct downloads
+
+| Architecture | Desktop application | Standalone CLI |
+| --- | --- | --- |
+| Apple Silicon | [DMG](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-0.1.3-aarch64-apple-darwin.dmg) · [app ZIP](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-0.1.3-aarch64-apple-darwin.app.zip) | [CLI archive](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-cli-0.1.3-aarch64-apple-darwin.tar.xz) |
+| Intel | [DMG](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-0.1.3-x86_64-apple-darwin.dmg) · [app ZIP](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-0.1.3-x86_64-apple-darwin.app.zip) | [CLI archive](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-cli-0.1.3-x86_64-apple-darwin.tar.xz) |
 
 Open the DMG and copy **Clipboard Transformer** to **Applications**. The
 `.app.zip` is an alternative app-only download.
@@ -69,27 +74,6 @@ sudo install -m 0755 clipboard-transformer /usr/local/bin/clipboard-transformer
 
 ## Windows
 
-### MSI
-
-Download `clipboard-transformer-<version>-x86_64.msi` from the
-[latest release](https://github.com/jag-k/clipboard-transformer/releases/latest).
-The MSI installs the tray application, Start menu entry, toast activation
-support, and the standalone CLI. Its PATH option makes
-`clipboard-transformer.exe` available in new terminal sessions.
-The MSI is a per-machine installation, so Windows requests administrator
-approval. Manual non-interactive installation must be launched from an
-elevated process.
-
-> [!NOTE]
-> An upgrade with the original `0.1.0` MSI can leave the installed CLI
-> directory off `PATH`. The CLI remains available at
-> `C:\Program Files\Clipboard Transformer\bin\clipboard-transformer.exe`.
-> Feature ownership is corrected for the next release.
-
-The Windows artifacts are not Authenticode-signed yet. Windows SmartScreen or
-managed-device policy may warn about or block them even though release
-artifacts include GitHub attestations and SHA-256 files.
-
 ### Scoop
 
 Scoop installs the portable app and exposes the CLI through its shim:
@@ -99,7 +83,42 @@ scoop bucket add jag-k https://github.com/jag-k/scoop-bucket
 scoop install clipboard-transformer
 ```
 
-### Portable files
+### WinGet
+
+> [!WARNING]
+> Clipboard Transformer is not in the WinGet community catalog yet. The command
+> below will work only after
+> [microsoft/winget-pkgs#411013](https://github.com/microsoft/winget-pkgs/pull/411013)
+> is merged and the catalog update becomes available.
+
+```powershell
+winget install --exact --id JagK.ClipboardTransformer
+```
+
+After the first manifest is accepted, stable release updates are prepared to
+publish automatically.
+
+### Direct downloads
+
+All current Windows builds target x86-64.
+
+| Format | Contents | Download |
+| --- | --- | --- |
+| MSI installer | Desktop app + CLI | [MSI](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-0.1.3-x86_64.msi) |
+| Portable ZIP | Desktop app + CLI | [ZIP](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-0.1.3-x86_64-windows-portable.zip) |
+| Portable GUI | Desktop app only | [EXE](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-app-0.1.3-x86_64.exe) |
+| Portable CLI | CLI only | [EXE](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-cli-0.1.3-x86_64.exe) |
+
+The MSI installs the tray application, Start menu entry, toast activation
+support, and the standalone CLI. Its PATH option makes
+`clipboard-transformer.exe` available in new terminal sessions. It is a
+per-machine installation, so Windows requests administrator approval.
+
+> [!NOTE]
+> An upgrade with the original `0.1.0` MSI can leave
+> the installed CLI directory off `PATH`. The CLI remains available at
+> `C:\Program Files\Clipboard Transformer\bin\clipboard-transformer.exe`.
+> Feature ownership is corrected for the next release.
 
 The `clipboard-transformer-<version>-x86_64-windows-portable.zip` download
 contains both:
@@ -111,9 +130,9 @@ Separate GUI-only and CLI-only `.exe` downloads are also available. Portable
 downloads do not create an installer-owned Start menu entry or add the CLI
 directory to `PATH`.
 
-WinGet publication is pending its first manifest submission. After
-`JagK.ClipboardTransformer` is accepted into the community catalog, stable
-release updates are prepared to publish automatically.
+The Windows artifacts are not Authenticode-signed yet. Windows SmartScreen or
+managed-device policy may warn about or block them even though release
+artifacts include GitHub attestations and SHA-256 files.
 
 ## Linux
 
@@ -121,15 +140,88 @@ Linux clipboard support depends on the active display session. Read
 [Linux desktop support](linux.md) and run `clipboard-transformer doctor` in the
 same graphical session before enabling autostart.
 
-### Homebrew on Linux
+### Testing disclaimer
 
-The project cask installs the AppImage and standalone CLI together:
+I do not have a general-purpose Linux desktop machine on which I can test every
+installation method across different distributions, desktop environments, and
+display-session configurations. The Linux hardware available to me is limited
+to a couple of headless servers and a Steam Deck, which I no longer use as an
+installation test bed because experimenting on it is impractical.
+
+If you encounter a problem installing or launching Clipboard Transformer, or
+find that the application does not work as documented, please
+[open an issue](https://github.com/jag-k/clipboard-transformer/issues). Reports
+from real Linux setups are especially helpful.
+
+### Flatpak repository
+
+The shared `jag-k` Flatpak repository is the update-capable Flatpak route and
+may contain multiple applications. Once published, add it and install Clipboard
+Transformer with:
 
 ```sh
-brew install --cask jag-k/tap/clipboard-transformer
+flatpak remote-add --user --if-not-exists jag-k \
+  https://flatpak.jag-k.dev/jag-k.flatpakrepo
+flatpak install --user jag-k dev.jag_k.clipboard_transformer
 ```
 
-Native distro packages are generally a better fit when one is available.
+The application-specific `.flatpakref` performs both operations in one step:
+
+```sh
+flatpak install --user \
+  https://flatpak.jag-k.dev/clipboard-transformer.flatpakref
+```
+
+Updates then arrive through the normal `flatpak update` flow. Until that URL
+is published, use a release bundle from the direct-download section below.
+
+The Flatpak contains the desktop app and a sandboxed CLI. Configuration is
+stored below `~/.var/app/dev.jag_k.clipboard_transformer/config/`. Host
+executables and arbitrary host files are not visible to `shell` rules, and
+in-app autostart is disabled. URL imports and plugin downloads remain available
+through the sandbox's network permission.
+
+Launch the desktop application normally:
+
+```sh
+flatpak run dev.jag_k.clipboard_transformer
+```
+
+The CLI is included in the same Flatpak but is not added to the host `PATH`.
+Select it explicitly with `--command` and pass CLI arguments after the app ID:
+
+```sh
+flatpak run --command=clipboard-transformer \
+  dev.jag_k.clipboard_transformer --help
+flatpak run --command=clipboard-transformer \
+  dev.jag_k.clipboard_transformer doctor
+```
+
+### Nix on Linux
+
+The same project flake supports `x86_64-linux` and `aarch64-linux`:
+
+```sh
+nix profile install github:jag-k/clipboard-transformer
+nix run github:jag-k/clipboard-transformer
+```
+
+This is direct installation from the project flake, not a nixpkgs catalog
+entry. Successful project CI builds are available from the public `jag-k`
+Cachix binary cache declared by the flake; Nix falls back to a local source
+build when that cache does not contain the exact requested output.
+
+If a multi-user Nix daemon ignores the cache settings declared by the flake,
+enable the cache once before installation:
+
+```sh
+nix run nixpkgs#cachix -- use jag-k
+```
+
+The package places its executables in the Nix profile and desktop metadata
+under the profile's `share/applications`. NixOS and Home Manager integrate
+those profile paths with the desktop environment; standalone Nix does not copy
+them into `/usr`.
 
 ### Arch User Repository
 
@@ -153,10 +245,54 @@ paru -S clipboard-transformer-bin
 yay -S clipboard-transformer-bin
 ```
 
-### DEB, RPM, and Pacman packages
+### Homebrew on Linux
 
-The native release packages install both the desktop application and the CLI,
-plus the desktop entry, icon, and D-Bus activation metadata:
+The project cask installs the AppImage and standalone CLI together:
+
+```sh
+brew install --cask jag-k/tap/clipboard-transformer
+```
+
+Native distro packages are generally a better fit when one is available.
+
+### Package version status
+
+[Repology](https://repology.org/project/clipboard-transformer/versions)
+compares versions found in the repositories it indexes. Project-owned
+Homebrew taps, Scoop buckets, and some personal PPA/COPR repositories may not
+appear there.
+
+### Direct downloads
+
+The current direct Linux artifacts target x86-64.
+
+| Format | Contents | Download |
+| --- | --- | --- |
+| AppImage | Desktop app only | [AppImage](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-app_0.1.3_x86_64.AppImage) |
+| Debian package | Desktop app + CLI | [DEB](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-app_0.1.3_amd64.deb) |
+| RPM package | Desktop app + CLI | [RPM](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-0.1.3-1.x86_64.rpm) |
+| Pacman package | Desktop app + CLI | [archive](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-app_0.1.3_x86_64.tar.gz) |
+| CLI archive | CLI only | [archive](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-cli-0.1.3-x86_64-linux.tar.xz) |
+
+Flatpak-enabled releases also attach
+`clipboard-transformer-<version>-x86_64.flatpak` to the matching
+[GitHub release](https://github.com/jag-k/clipboard-transformer/releases).
+Install and launch that bundle with:
+
+```sh
+flatpak install --user ./clipboard-transformer-<version>-x86_64.flatpak
+flatpak run dev.jag_k.clipboard_transformer
+```
+
+Its sandboxed CLI can be invoked explicitly:
+
+```sh
+flatpak run --command=clipboard-transformer \
+  dev.jag_k.clipboard_transformer doctor
+```
+
+The native DEB, RPM, and Pacman packages install the desktop application, CLI,
+desktop entry, icon, and D-Bus activation metadata:
 
 ```sh
 # Debian or Ubuntu
@@ -169,11 +305,8 @@ sudo dnf install ./clipboard-transformer-<version>-1.x86_64.rpm
 sudo pacman -U ./clipboard-transformer-app_<version>_x86_64.tar.gz
 ```
 
-These packages are direct GitHub downloads, not an APT, DNF, or Pacman
-repository. The package manager can uninstall them, but it will not discover a
-new Clipboard Transformer release automatically.
-
-### AppImage and manual CLI
+These files are not an APT, DNF, or Pacman repository. The package manager can
+uninstall them, but it will not discover new releases automatically.
 
 The AppImage is a portable desktop application:
 
@@ -192,14 +325,6 @@ install -m 0755 clipboard-transformer ~/.local/bin/clipboard-transformer
 ```
 
 Make sure `~/.local/bin` is on `PATH`.
-
-### Package version status
-
-[Repology](https://repology.org/project/clipboard-transformer/versions)
-compares versions found in the repositories it indexes. Project-owned
-Homebrew taps, Scoop buckets, and some personal PPA/COPR repositories may not
-appear there, so the matrix supplements rather than replaces the installation
-table above.
 
 ## Verify a manual download
 

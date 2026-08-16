@@ -8,6 +8,24 @@ The format is based on [Keep a Changelog], and this project follows
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+### Added
+
+- **Packaging/Flatpak:** Add one offline Flatpak containing the desktop app and
+  sandboxed CLI, GitHub Release bundles with checksums and provenance, and a
+  signed shared update repository at `flatpak.jag-k.dev`. Adapt autostart and
+  tray D-Bus registration to the Flatpak sandbox.
+- **Packaging/Nix:** Add a project flake for Linux and macOS app/CLI builds,
+  native macOS `.app` bundles, cross-platform CI, and prebuilt outputs in the
+  public `jag-k` Cachix cache. Keep Intel macOS on the maintained
+  `nixpkgs-26.05-darwin` branch.
+
+### Changed
+
+- **Documentation:** Organize installation by operating system, separate
+  package-manager and direct-download options, distinguish GUI and CLI
+  artifacts, and document Flatpak sandbox behavior, explicit CLI invocation,
+  Nix application paths, and Cachix setup.
+
 ## [0.1.3] - 2026-07-31
 
 ### Added

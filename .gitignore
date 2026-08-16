@@ -2,6 +2,7 @@
 /target/
 /plugins/*/target/
 /plugins.local/
+/package/flatpak/cargo-sources.json
 
 # Cargo local configuration and generated package output
 .cargo/.package-cache
@@ -70,3 +71,5 @@ temp/
 local.*
 *.local.*
 *.local
+
+.flatpak-builder
