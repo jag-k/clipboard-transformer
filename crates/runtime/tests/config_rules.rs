@@ -1438,6 +1438,19 @@ fn generated_schema_marks_rule_id_required() {
         );
     }
     assert!(schema["definitions"]["AppConfig"]["properties"]["disable_for"].is_object());
+    assert!(schema["definitions"]["AppConfig"]["properties"]["notifications"].is_object());
+    assert!(schema["definitions"]["NotificationConfig"]["properties"]["startup"].is_object());
+    assert!(
+        schema["definitions"]["NotificationConfig"]["properties"]["reload_success"].is_object()
+    );
+    assert!(schema["definitions"]["NotificationConfig"]["properties"]["transform"].is_object());
+    assert!(
+        schema["definitions"]["NotificationConfig"]["properties"]["double_copy_ignored"]
+            .is_object()
+    );
+    assert!(
+        schema["definitions"]["NotificationConfig"]["properties"]["plugin_attention"].is_object()
+    );
     assert!(schema["definitions"]["AppConfig"]["properties"]["recent_items_count"].is_object());
     assert!(schema["definitions"]["AppConfig"]["properties"]["max_item_bytes"].is_object());
     assert!(schema["definitions"]["AppConfig"]["properties"]["max_history_bytes"].is_object());
@@ -1465,6 +1478,17 @@ fn default_config_removes_tracking_query_params() {
         result.after.text(),
         Some("https://example.com/page?a=1#section")
     );
+}
+
+#[test]
+fn default_config_enables_notifications() {
+    let config: ct_runtime::ConfigDocument = serde_yaml::from_str(DEFAULT_CONFIG_YAML).unwrap();
+
+    assert!(config.config.notifications.startup);
+    assert!(config.config.notifications.reload_success);
+    assert!(config.config.notifications.transform);
+    assert!(config.config.notifications.double_copy_ignored);
+    assert!(config.config.notifications.plugin_attention);
 }
 
 #[test]

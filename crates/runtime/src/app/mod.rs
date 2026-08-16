@@ -469,6 +469,9 @@ where
         config_path: &Path,
         rule_count: usize,
     ) -> Result<()> {
+        if !self.config.config.notifications.startup {
+            return Ok(());
+        }
         self.deliver_startup_best_effort(StartupNotification {
             notification_id: "clipboard-transformer-startup".to_string(),
             title: "Clipboard Transformer is running".to_string(),
@@ -812,20 +815,22 @@ where
             .truncate(self.config.config.recent_items_count.max(1));
         self.remove_notifications_best_effort(removed);
 
-        self.deliver_transform_best_effort(TransformNotification {
-            notification_id: notification_id.clone(),
-            transform_id,
-            rule_id: result.applied_rules.last().map(|rule| rule.id.clone()),
-            title: notification_title,
-            body: notification_body,
-            disable_for_seconds: (self.config.config.disable_for > 0)
-                .then_some(self.config.config.disable_for),
-            edit_target: result
-                .applied_rules
-                .last()
-                .and_then(|rule| self.rule_edit_target(&rule.id))
-                .or_else(|| self.config_edit_target()),
-        });
+        if self.config.config.notifications.transform {
+            self.deliver_transform_best_effort(TransformNotification {
+                notification_id: notification_id.clone(),
+                transform_id,
+                rule_id: result.applied_rules.last().map(|rule| rule.id.clone()),
+                title: notification_title,
+                body: notification_body,
+                disable_for_seconds: (self.config.config.disable_for > 0)
+                    .then_some(self.config.config.disable_for),
+                edit_target: result
+                    .applied_rules
+                    .last()
+                    .and_then(|rule| self.rule_edit_target(&rule.id))
+                    .or_else(|| self.config_edit_target()),
+            });
+        }
 
         if self.config.config.recent_items_count > 0 {
             let record = HistoryRecord {
@@ -1005,6 +1010,9 @@ where
     }
 
     fn deliver_double_copy_ignored_notification(&mut self) -> Result<()> {
+        if !self.config.config.notifications.double_copy_ignored {
+            return Ok(());
+        }
         let timeout = Duration::from_secs(self.config.config.double_copy_window);
         self.deliver_startup_best_effort(StartupNotification {
             notification_id: "clipboard-transformer-double-copy-ignored".to_string(),
@@ -1054,17 +1062,19 @@ where
                 self.recent_transforms
                     .truncate(self.config.config.recent_items_count);
                 self.prune_persistent_history();
-                self.deliver_startup_best_effort(StartupNotification {
-                    notification_id: "clipboard-transformer-config-reloaded".to_string(),
-                    title: "Clipboard Transformer config reloaded".to_string(),
-                    body: format!(
-                        "{rule_count} valid {} active from {} watched file(s)",
-                        pluralize_rules(rule_count),
-                        watched_sources.len()
-                    ),
-                    edit_target: self.config_edit_target(),
-                    reload_request_path: None,
-                });
+                if self.config.config.notifications.reload_success {
+                    self.deliver_startup_best_effort(StartupNotification {
+                        notification_id: "clipboard-transformer-config-reloaded".to_string(),
+                        title: "Clipboard Transformer config reloaded".to_string(),
+                        body: format!(
+                            "{rule_count} valid {} active from {} watched file(s)",
+                            pluralize_rules(rule_count),
+                            watched_sources.len()
+                        ),
+                        edit_target: self.config_edit_target(),
+                        reload_request_path: None,
+                    });
+                }
                 if plugins_changed {
                     self.deliver_plugin_attention_notification();
                 }
@@ -1094,6 +1104,9 @@ where
     /// Callers gate on the issue fingerprint so repeated reloads with the
     /// same issues stay quiet.
     pub fn deliver_plugin_attention_notification(&mut self) {
+        if !self.config.config.notifications.plugin_attention {
+            return;
+        }
         let attention: Vec<&crate::plugins::PluginStatus> = self
             .plugin_statuses
             .iter()
@@ -1578,6 +1591,20 @@ mod tests {
     }
 
     #[test]
+    fn transform_notification_can_be_disabled_without_disabling_transform() {
+        let clipboard = MemoryClipboardBackend::new(Some(ClipboardItem::from_text("cat")));
+        let notifications = NoopNotificationBackend::default();
+        let mut document = config();
+        document.config.notifications.transform = false;
+        let mut agent = Agent::new(clipboard, notifications, document).unwrap();
+
+        assert!(agent.run_once_from_clipboard().unwrap().is_some());
+        assert_eq!(agent.clipboard.read().unwrap().unwrap().text(), Some("dog"));
+        assert!(agent.notifications.delivered.is_empty());
+        assert_eq!(agent.tray_snapshot().recent.len(), 1);
+    }
+
+    #[test]
     fn selective_text_transform_never_reads_or_writes_unrequested_payloads() {
         let mut original = ClipboardItem::from_text("cat");
         let binary_format = ClipboardFormat::new("public.png");
@@ -1838,6 +1865,21 @@ mod tests {
     }
 
     #[test]
+    fn startup_notification_can_be_disabled() {
+        let clipboard = MemoryClipboardBackend::new(None);
+        let notifications = NoopNotificationBackend::default();
+        let mut document = config();
+        document.config.notifications.startup = false;
+        let mut agent = Agent::new(clipboard, notifications, document).unwrap();
+
+        agent
+            .deliver_startup_notification(std::path::Path::new("/tmp/config.yaml"), 1)
+            .unwrap();
+
+        assert!(agent.notifications.startups.is_empty());
+    }
+
+    #[test]
     fn own_clipboard_write_is_not_reprocessed() {
         let clipboard = MemoryClipboardBackend::new(None);
         let notifications = NoopNotificationBackend::default();
@@ -1912,6 +1954,27 @@ mod tests {
                 .map(|target| target.path.as_str()),
             Some("/tmp/config.yaml")
         );
+    }
+
+    #[test]
+    fn double_copy_ignored_notification_can_be_disabled() {
+        let clipboard = MemoryClipboardBackend::new(None);
+        let notifications = NoopNotificationBackend::default();
+        let mut document = config();
+        document.config.notifications.double_copy_ignored = false;
+        let mut agent = Agent::new(clipboard, notifications, document).unwrap();
+
+        assert!(agent
+            .handle_clipboard_change(ClipboardItem::from_text("cat"))
+            .unwrap()
+            .is_some());
+
+        let original = ClipboardItem::from_text("cat");
+        agent.clipboard.write(&original).unwrap();
+        assert!(agent.handle_clipboard_change(original).unwrap().is_none());
+
+        assert_eq!(agent.clipboard.read().unwrap().unwrap().text(), Some("cat"));
+        assert!(agent.notifications.startups.is_empty());
     }
 
     #[test]
@@ -2070,6 +2133,90 @@ mod tests {
             .unwrap();
 
         assert_eq!(agent.notifications.configured_disable_for, [30]);
+    }
+
+    #[test]
+    fn applied_reload_uses_new_notification_preference() {
+        let mut agent = Agent::new(
+            MemoryClipboardBackend::new(None),
+            NoopNotificationBackend::default(),
+            config(),
+        )
+        .unwrap();
+        let mut document = config();
+        document.config.notifications.reload_success = false;
+        let engine = RuleEngine::compile(document.rules.clone()).unwrap();
+
+        agent
+            .handle_event(AppEvent::ConfigReloaded(reload::ReloadOutcome::Applied {
+                config: Box::new(document),
+                engine,
+                rule_count: 1,
+                watched_sources: [PathBuf::from("/tmp/config.yaml")].into(),
+                rule_sources: BTreeMap::new(),
+                warnings: Vec::new(),
+                plugin_statuses: Vec::new(),
+                plugin_fingerprint: 0,
+            }))
+            .unwrap();
+
+        assert!(agent.notifications.startups.is_empty());
+    }
+
+    #[test]
+    fn reload_failure_is_not_suppressed_by_lifecycle_preferences() {
+        let mut document = config();
+        document.config.notifications.startup = false;
+        document.config.notifications.reload_success = false;
+        let mut agent = Agent::new(
+            MemoryClipboardBackend::new(None),
+            NoopNotificationBackend::default(),
+            document,
+        )
+        .unwrap();
+
+        agent
+            .handle_event(AppEvent::ConfigReloaded(reload::ReloadOutcome::Failed {
+                error: "invalid config".into(),
+                reload_request_path: None,
+            }))
+            .unwrap();
+
+        assert_eq!(agent.notifications.startups.len(), 1);
+        assert_eq!(
+            agent.notifications.startups[0].title,
+            "Clipboard Transformer config reload failed"
+        );
+    }
+
+    #[test]
+    fn plugin_attention_notification_can_be_disabled_without_hiding_tray_status() {
+        let mut document = config();
+        document.config.notifications.plugin_attention = false;
+        let mut agent = Agent::new(
+            MemoryClipboardBackend::new(None),
+            NoopNotificationBackend::default(),
+            document,
+        )
+        .unwrap();
+        agent.set_plugin_statuses(
+            vec![crate::plugins::PluginStatus {
+                path: PathBuf::from("/tmp/broken.wasm"),
+                id: "dev.example.broken".into(),
+                manifest: None,
+                state: crate::plugins::PluginState::Failed,
+                issues: Vec::new(),
+                available_rules: Vec::new(),
+                granted_http_hosts: Vec::new(),
+                granted: Default::default(),
+            }],
+            1,
+        );
+
+        agent.deliver_plugin_attention_notification();
+
+        assert!(agent.notifications.startups.is_empty());
+        assert!(agent.tray_snapshot().plugins[0].requires_attention);
     }
 
     #[test]

@@ -21,6 +21,8 @@ pub struct AppConfig {
     pub double_copy_window: u64,
     /// Default notification "Disable" action timeout in seconds. Set to 0 to hide the action.
     pub disable_for: u64,
+    /// Controls non-actionable desktop lifecycle notifications.
+    pub notifications: NotificationConfig,
     /// Source applications to filter globally. Values match bundle id or app name.
     pub apps: Vec<String>,
     /// How to interpret apps globally: blacklist skips listed apps; whitelist only allows listed apps.
@@ -31,6 +33,33 @@ pub struct AppConfig {
     pub editor: Option<EditorConfig>,
     /// Host-owned authorization for native shell rule providers.
     pub shell: ShellConfig,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(default)]
+pub struct NotificationConfig {
+    /// Notify after the desktop app starts successfully.
+    pub startup: bool,
+    /// Notify after a changed configuration is applied successfully.
+    pub reload_success: bool,
+    /// Notify after clipboard content is transformed successfully.
+    pub transform: bool,
+    /// Notify when a double copy bypasses configured rules.
+    pub double_copy_ignored: bool,
+    /// Notify when one or more plugins require attention.
+    pub plugin_attention: bool,
+}
+
+impl Default for NotificationConfig {
+    fn default() -> Self {
+        Self {
+            startup: true,
+            reload_success: true,
+            transform: true,
+            double_copy_ignored: true,
+            plugin_attention: true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -73,6 +102,7 @@ impl Default for AppConfig {
             persist_last_clipboard: false,
             double_copy_window: 10,
             disable_for: 600,
+            notifications: NotificationConfig::default(),
             apps: Vec::new(),
             app_mode: None,
             import_refresh_interval: 600,
@@ -156,6 +186,44 @@ mod tests {
         )
         .unwrap();
         assert_eq!(document.config.max_item_bytes, 42);
+        assert!(document.config.notifications.startup);
+        assert!(document.config.notifications.reload_success);
+        assert!(document.config.notifications.transform);
+        assert!(document.config.notifications.double_copy_ignored);
+        assert!(document.config.notifications.plugin_attention);
+    }
+
+    #[test]
+    fn notification_preferences_can_be_disabled_independently() {
+        let startup_disabled = parse_document(
+            "config:\n  notifications:\n    startup: false\nrules: []\n",
+            ConfigFormat::Yaml,
+        )
+        .unwrap();
+        assert!(!startup_disabled.config.notifications.startup);
+        assert!(startup_disabled.config.notifications.reload_success);
+        assert!(startup_disabled.config.notifications.transform);
+        assert!(startup_disabled.config.notifications.double_copy_ignored);
+        assert!(startup_disabled.config.notifications.plugin_attention);
+
+        let reload_disabled = parse_document(
+            "config:\n  notifications:\n    reload_success: false\nrules: []\n",
+            ConfigFormat::Yaml,
+        )
+        .unwrap();
+        assert!(reload_disabled.config.notifications.startup);
+        assert!(!reload_disabled.config.notifications.reload_success);
+
+        let transform_disabled = parse_document(
+            "config:\n  notifications:\n    transform: false\nrules: []\n",
+            ConfigFormat::Yaml,
+        )
+        .unwrap();
+        assert!(transform_disabled.config.notifications.startup);
+        assert!(transform_disabled.config.notifications.reload_success);
+        assert!(!transform_disabled.config.notifications.transform);
+        assert!(transform_disabled.config.notifications.double_copy_ignored);
+        assert!(transform_disabled.config.notifications.plugin_attention);
     }
 
     #[test]

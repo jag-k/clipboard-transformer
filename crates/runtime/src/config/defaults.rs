@@ -20,6 +20,12 @@ config:
   persist_last_clipboard: false
   double_copy_window: 10
   disable_for: 600
+  notifications:
+    startup: true
+    reload_success: true
+    transform: true
+    double_copy_ignored: true
+    plugin_attention: true
   import_refresh_interval: 600
   apps: []
   # Optional explicit editor override for the Edit rule action:

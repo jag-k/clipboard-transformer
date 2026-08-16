@@ -10,6 +10,9 @@ The format is based on [Keep a Changelog], and this project follows
 
 ### Added
 
+- **Desktop/Notifications:** Add independent `config.notifications` preferences
+  for startup, successful reload, transformation, double-copy bypass, and
+  plugin-attention notifications without hiding failures or tray status.
 - **Packaging/Flatpak:** Add one offline Flatpak containing the desktop app and
   sandboxed CLI, GitHub Release bundles with checksums and provenance, and a
   signed shared update repository at `flatpak.jag-k.dev`. Adapt autostart and

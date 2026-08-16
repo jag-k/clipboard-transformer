@@ -77,11 +77,22 @@ Prefer `clipboard-transformer paths` over hard-coding platform locations.
 | `max_history_bytes` | `536870912` | Maximum retained before/after history bytes. |
 | `persist_last_clipboard` | `false` | Persist the complete latest external item for `inspect`. |
 | `disable_for` | `600` | Seconds used by a notification's disable action. |
+| `notifications.startup` | `true` | Notify after the desktop app starts successfully. |
+| `notifications.reload_success` | `true` | Notify after a changed config is applied successfully. |
+| `notifications.transform` | `true` | Notify after clipboard content is transformed. |
+| `notifications.double_copy_ignored` | `true` | Notify when a double copy bypasses rules. |
+| `notifications.plugin_attention` | `true` | Notify when plugins require attention. |
 | `import_refresh_interval` | `600` | Remote-import refresh interval. `0` uses cache only. |
 | `apps` | `[]` | Global source-application filter. |
 | `app_mode` | unset | `blacklist` or `whitelist`; required when `apps` is non-empty. |
 | `editor` | unset | Command and arguments used by **Edit rule**. |
 | `shell.enabled` | `false` | Authorize trusted native shell rule providers. |
+
+Notification preferences suppress only their named desktop notifications.
+Disabling `transform` does not disable transformations or tray history, but its
+notification actions such as **Undo**, **Edit rule**, and **Disable rule** are
+not shown. Disabling `plugin_attention` does not hide plugin status from the
+tray. Startup, runtime, and reload failure notifications remain enabled.
 
 ## Rule fields
 

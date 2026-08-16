@@ -27,7 +27,9 @@ pub use schema::{
 
 use ct_core::{is_registered_rule_type, AppMode, RawRule, RuleEngine};
 
-pub use ct_config::{AppConfig, ConfigDocument, ConfigFormat, EditorConfig, ShellConfig};
+pub use ct_config::{
+    AppConfig, ConfigDocument, ConfigFormat, EditorConfig, NotificationConfig, ShellConfig,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct RuleSource {
