@@ -26,16 +26,14 @@ ignore = [
   # and its fixes start at 46.0.2, so no compatible Cargo update exists yet.
   # Keep this as a warning until Extism publishes a compatible Wasmtime upgrade.
   { id = "RUSTSEC-2026-0222", reason = "low-severity Wasmtime advisory in transitive Extism runtime; no patched Extism-compatible version is available" },
-  # Two quick-xml DoS advisories (quadratic attribute scan, unbounded namespace
-  # allocation) reached only through `wayland-scanner`, which is a proc-macro
-  # crate: it runs during compilation and is not linked into any shipped
-  # artifact. The XML it parses is the protocol definitions vendored in the
-  # wayland-protocols crates, not input from a user or a clipboard payload.
-  # Not fixable here either -- wayland-scanner 0.31.10 requires `quick-xml
-  # ^0.39`, so 0.41.0 is a semver-incompatible bump upstream has to make.
-  # Drop both entries once wayland-scanner ships a quick-xml >=0.41 release.
-  { id = "RUSTSEC-2026-0194", reason = "quick-xml in the wayland-scanner proc-macro, compile-time only, fixed version is semver-incompatible upstream" },
-  { id = "RUSTSEC-2026-0195", reason = "same quick-xml path as RUSTSEC-2026-0194" },
+  # wasm-compose is reached only through Wasmtime in the Extism plugin runtime.
+  # Its persistent data structures use three crates that were archived together.
+  # These advisories are informational and none of the crates has a patched
+  # release, so no compatible Cargo update can remove them yet. Drop these
+  # entries once Extism/Wasmtime no longer pulls this wasm-compose dependency.
+  { id = "RUSTSEC-2026-0247", reason = "unmaintained bitmaps crate in transitive Extism/Wasmtime wasm-compose dependency; no patched release is available" },
+  { id = "RUSTSEC-2026-0250", reason = "unmaintained im-rc crate in transitive Extism/Wasmtime wasm-compose dependency; no patched release is available" },
+  { id = "RUSTSEC-2026-0251", reason = "unmaintained sized-chunks crate in transitive Extism/Wasmtime wasm-compose dependency; no patched release is available" },
 ]
 
 [licenses]
