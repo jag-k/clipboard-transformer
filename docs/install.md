@@ -140,18 +140,19 @@ Linux clipboard support depends on the active display session. Read
 [Linux desktop support](linux.md) and run `clipboard-transformer doctor` in the
 same graphical session before enabling autostart.
 
-### Testing disclaimer
-
-I do not have a general-purpose Linux desktop machine on which I can test every
-installation method across different distributions, desktop environments, and
-display-session configurations. The Linux hardware available to me is limited
-to a couple of headless servers and a Steam Deck, which I no longer use as an
-installation test bed because experimenting on it is impractical.
-
-If you encounter a problem installing or launching Clipboard Transformer, or
-find that the application does not work as documented, please
-[open an issue](https://github.com/jag-k/clipboard-transformer/issues). Reports
-from real Linux setups are especially helpful.
+> [!IMPORTANT]
+> **Testing disclaimer**
+>
+> I do not have a general-purpose Linux desktop machine on which I can test every
+> installation method across different distributions, desktop environments, and
+> display-session configurations. The Linux hardware available to me is limited
+> to a couple of headless servers and a Steam Deck, which I no longer use as an
+> installation test bed because experimenting on it is impractical.
+>
+> If you encounter a problem installing or launching Clipboard Transformer,
+> or find that the application does not work as documented,
+> please [open an issue](https://github.com/jag-k/clipboard-transformer/issues).
+> Reports from real Linux setups are especially helpful.
 
 ### Flatpak repository
 

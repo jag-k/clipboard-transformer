@@ -54,6 +54,13 @@ platform runner:
   job as an artifact, so a missing section fails before any signing or
   notarization runner starts.
 
+Before creating the public GitHub Release, the workflow also requires the full
+Nix matrix to pass. For stable releases with Flatpak repository publication
+enabled, it imports and signs the Flatpak build artifact before the GitHub
+Release is created. A Nix build, Flatpak signature, or shared-repository update
+failure therefore leaves the tagged run red without publishing a GitHub
+Release.
+
 Disabled platform jobs do not start, so disabling macOS also avoids consuming a
 macOS runner and does not require Apple credentials. Prerelease tags build only
 the enabled platforms, create a GitHub prerelease, and never update package
@@ -68,15 +75,17 @@ needed to read source, upload attestations, and create the GitHub Release.
 ## Nix binary cache
 
 The `Nix` workflow builds the project flake on Linux, Apple Silicon macOS, and
-Intel macOS. It reads from the public `jag-k` Cachix cache and pushes successful
-build outputs so users can install matching flake revisions without compiling
-the application locally.
+Intel macOS. Determinate Nix no longer ships an installer for an Intel macOS
+host, so the workflow uses a pinned upstream Nix installer on every runner and
+builds `x86_64-darwin` natively on `macos-15-intel`. The workflow reads from the
+public `jag-k` Cachix cache and pushes successful build outputs so users can
+install matching flake revisions without compiling the application locally.
 
 Create a per-cache token for the public `jag-k` cache with write permission and
 store it as `CACHIX_AUTH_TOKEN`. The public cache URL and signing key belong in
 `flake.nix`; the token belongs only in GitHub Actions secrets. Pull-request
-runs use the cache read-only; pushes to `main` and manual workflow runs publish
-successful outputs.
+runs use the cache read-only; pushes to `main`, tagged release gates, and manual
+workflow runs publish successful outputs.
 
 ## macOS signing and notarization secrets
 
@@ -152,12 +161,14 @@ Create a fine-grained GitHub personal access token scoped only to
 `jag-k/flatpak-repo`, with **Contents — Read and write**, and store it as
 `FLATPAK_REPOSITORY_TOKEN`.
 
-The stable release workflow downloads the already-published `.flatpak` bundle,
-imports it into `repo/`, signs the application ref and repository summary,
-generates static deltas, and commits `jag-k.flatpakrepo` plus the application's
-`.flatpakref`. Set `FLATPAK_PUBLISH_ENABLED=true` only after the repository,
-Pages deployment, token, and signing-key backup have been verified. Publication
-also requires `LINUX_RELEASE_ENABLED=true`.
+The stable release workflow downloads the `.flatpak` build artifact before the
+public GitHub Release is created, imports it into `repo/`, signs the application
+ref and repository summary, generates static deltas, and commits
+`jag-k.flatpakrepo` plus the application's `.flatpakref`. The manually
+dispatched publication workflow instead downloads an existing GitHub Release
+asset. Set `FLATPAK_PUBLISH_ENABLED=true` only after the repository, Pages
+deployment, token, and signing-key backup have been verified. Publication also
+requires `LINUX_RELEASE_ENABLED=true`.
 
 ## Arch User Repository
 

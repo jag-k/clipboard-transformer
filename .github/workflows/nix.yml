@@ -1,6 +1,7 @@
 name: Nix
 
 on:
+  workflow_call:
   pull_request:
     paths:
       - ".github/workflows/nix.yml"
@@ -37,20 +38,30 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner:
-          - ubuntu-24.04
-          - macos-15
-          - macos-15-intel
+        include:
+          - runner: ubuntu-24.04
+            system: x86_64-linux
+          - runner: macos-15
+            system: aarch64-darwin
+          # Determinate Nix no longer ships an Intel-host installer. Install
+          # pinned upstream Nix instead and build on GitHub's native Intel host.
+          - runner: macos-15-intel
+            system: x86_64-darwin
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - uses: DeterminateSystems/determinate-nix-action@v3
+      - uses: cachix/install-nix-action@b85815f71a6de0ddee80b8a80a98d43f4bcc66c7 # v31
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.34.8/install
       - uses: cachix/cachix-action@v17
         with:
           name: jag-k
           authToken: "${{ github.event_name != 'pull_request' && secrets.CACHIX_AUTH_TOKEN || '' }}"
           skipPush: "${{ github.event_name == 'pull_request' }}"
       - name: Build the default package
-        run: nix build --print-build-logs .#default
+        run: |
+          test "$(nix eval --impure --raw --expr builtins.currentSystem)" = \
+            "${{ matrix.system }}"
+          nix build --print-build-logs ".#packages.${{ matrix.system }}.default"

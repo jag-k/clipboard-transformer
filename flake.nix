@@ -62,8 +62,10 @@
             '' + pkgs.lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''
               install -Dm0644 package/linux/dev.jag-k.clipboard-transformer.desktop \
                 $out/share/applications/dev.jag-k.clipboard-transformer.desktop
-              substitute package/linux/dev.jag-k.clipboard-transformer.service \
-                $out/share/dbus-1/services/dev.jag-k.clipboard-transformer.service \
+              service="$out/share/dbus-1/services/dev.jag-k.clipboard-transformer.service"
+              install -Dm0644 package/linux/dev.jag-k.clipboard-transformer.service \
+                "$service"
+              substituteInPlace "$service" \
                 --replace-fail /usr/bin/clipboard-transformer-app \
                   $out/bin/clipboard-transformer-app
               install -Dm0644 assets/generated/linux/app-icon.png \

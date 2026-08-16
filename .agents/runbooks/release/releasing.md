@@ -3,9 +3,10 @@
 The tag-driven `.github/workflows/release.yml` workflow is the release
 orchestrator. Cargo builds portable executables and archives, while
 [`cargo-packager`](https://docs.crabnebula.dev/packager/) builds native desktop
-bundles and installers. Small publishing workflows update Homebrew, Scoop, AUR,
-and WinGet after the GitHub Release exists. To configure their credentials and
-feature switches, see `ci-configuration.md`. To verify any of this without
+bundles and installers. The Nix matrix and an enabled stable Flatpak repository
+update are release gates. Small publishing workflows update Homebrew, Scoop,
+AUR, and WinGet after the GitHub Release exists. To configure their credentials
+and feature switches, see `ci-configuration.md`. To verify any of this without
 publishing a release, see `packaging-verification.md`.
 
 The project does not use cargo-dist. Its built-in Homebrew support produces a
@@ -228,9 +229,23 @@ git diff --check
 
 `cargo release patch`, `cargo release minor`, or an explicit
 `cargo release <version>` then previews the version replacements, release
-commit, `v<version>` tag, and push configured in `release.toml`. After reviewing
-the dry run, repeat with `--execute`. Publishing to crates.io is disabled; the
-pushed tag starts the GitHub release workflow.
+commit, and local `v<version>` tag configured in `release.toml`. After reviewing
+the dry run, repeat with `--execute`. Publishing to crates.io and automatic Git
+pushes are disabled.
+
+Push the release commit without the tag, wait for the required main-branch CI,
+Nix, and standalone packaging checks, and only then push the local tag:
+
+```sh
+git push origin main
+# Wait for the required checks on the release commit to succeed.
+git push origin v<version>
+```
+
+The tag starts the release workflow, which repeats the Nix matrix as an
+in-workflow release gate and publishes an enabled stable Flatpak repository
+before creating the public GitHub Release. This second check protects the
+release even if a tag is pushed without observing the main-branch gate.
 
 Before the dry run, curate the `Unreleased` section in `CHANGELOG.md`.
 `cargo-release` turns it into a dated section for the new version and creates a

@@ -30,7 +30,6 @@ jobs:
             target: x86_64-apple-darwin
     runs-on: ${{ matrix.runner }}
     env:
-      VERSION: ${{ inputs.version }}
       APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
       APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
       APPLE_API_KEY: ${{ secrets.APPLE_API_KEY_ID }}
@@ -234,7 +233,7 @@ jobs:
             fi
           }
 
-          version="${VERSION}"
+          version="${{ inputs.version }}"
           app="target/packager/Clipboard Transformer.app"
           dmg="$(find target/packager -maxdepth 1 -name '*.dmg' -print -quit)"
           if [[ ! -d "${app}" || -z "${dmg}" ]]; then

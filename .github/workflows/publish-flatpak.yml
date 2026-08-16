@@ -9,6 +9,11 @@ on:
       tag:
         required: true
         type: string
+      artifact_name:
+        description: Artifact from the current workflow run; empty downloads from the release
+        required: false
+        default: ""
+        type: string
   workflow_dispatch:
     inputs:
       version:
@@ -66,7 +71,15 @@ jobs:
           path: site
           persist-credentials: true
 
-      - name: Download Flatpak bundle
+      - name: Download Flatpak bundle artifact
+        if: ${{ inputs.artifact_name != '' }}
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: bundles
+
+      - name: Download Flatpak bundle from release
+        if: ${{ inputs.artifact_name == '' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -107,9 +120,10 @@ jobs:
           flatpak build-import-bundle --update-appstream \
             "${repository}" "${bundle}"
           flatpak build-sign \
+            --arch=x86_64 \
             --gpg-homedir="${GPG_HOME}" \
             --gpg-sign="${FLATPAK_GPG_KEY_ID}" \
-            "${repository}" "${APP_ID}" stable x86_64
+            "${repository}" "${APP_ID}" stable
           flatpak build-update-repo \
             --generate-static-deltas \
             --prune \

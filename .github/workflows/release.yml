@@ -90,20 +90,24 @@ jobs:
             prerelease=true
           fi
 
-          echo "version=${version}" >> "${GITHUB_OUTPUT}"
-          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
-          echo "prerelease=${prerelease}" >> "${GITHUB_OUTPUT}"
+          {
+            echo "version=${version}"
+            echo "tag=${tag}"
+            echo "prerelease=${prerelease}"
+          } >> "${GITHUB_OUTPUT}"
 
           check_switch RELEASE_ENABLED "${RELEASE_ENABLED}"
           if [[ "${RELEASE_ENABLED}" == "false" ]]; then
             echo "Release is disabled by RELEASE_ENABLED=false"
-            echo "release_enabled=false" >> "${GITHUB_OUTPUT}"
-            for output in \
-              macos_enabled windows_enabled linux_enabled \
-              homebrew_enabled flatpak_publish_enabled scoop_enabled \
-              aur_enabled winget_enabled; do
-              echo "${output}=false" >> "${GITHUB_OUTPUT}"
-            done
+            {
+              echo "release_enabled=false"
+              for output in \
+                macos_enabled windows_enabled linux_enabled \
+                homebrew_enabled flatpak_publish_enabled scoop_enabled \
+                aur_enabled winget_enabled; do
+                echo "${output}=false"
+              done
+            } >> "${GITHUB_OUTPUT}"
             exit 0
           fi
 
@@ -183,15 +187,17 @@ jobs:
             fi
           fi
 
-          echo "release_enabled=true" >> "${GITHUB_OUTPUT}"
-          echo "macos_enabled=${MACOS_RELEASE_ENABLED}" >> "${GITHUB_OUTPUT}"
-          echo "windows_enabled=${WINDOWS_RELEASE_ENABLED}" >> "${GITHUB_OUTPUT}"
-          echo "linux_enabled=${LINUX_RELEASE_ENABLED}" >> "${GITHUB_OUTPUT}"
-          echo "homebrew_enabled=${HOMEBREW_PUBLISH_ENABLED}" >> "${GITHUB_OUTPUT}"
-          echo "flatpak_publish_enabled=${FLATPAK_PUBLISH_ENABLED}" >> "${GITHUB_OUTPUT}"
-          echo "scoop_enabled=${SCOOP_PUBLISH_ENABLED}" >> "${GITHUB_OUTPUT}"
-          echo "aur_enabled=${AUR_PUBLISH_ENABLED}" >> "${GITHUB_OUTPUT}"
-          echo "winget_enabled=${WINGET_PUBLISH_ENABLED}" >> "${GITHUB_OUTPUT}"
+          {
+            echo "release_enabled=true"
+            echo "macos_enabled=${MACOS_RELEASE_ENABLED}"
+            echo "windows_enabled=${WINDOWS_RELEASE_ENABLED}"
+            echo "linux_enabled=${LINUX_RELEASE_ENABLED}"
+            echo "homebrew_enabled=${HOMEBREW_PUBLISH_ENABLED}"
+            echo "flatpak_publish_enabled=${FLATPAK_PUBLISH_ENABLED}"
+            echo "scoop_enabled=${SCOOP_PUBLISH_ENABLED}"
+            echo "aur_enabled=${AUR_PUBLISH_ENABLED}"
+            echo "winget_enabled=${WINGET_PUBLISH_ENABLED}"
+          } >> "${GITHUB_OUTPUT}"
 
           printf '%s\n' \
             "Release configuration:" \
@@ -291,6 +297,30 @@ jobs:
       contents: read
       id-token: write
 
+  verify-nix:
+    needs: metadata
+    if: ${{ needs.metadata.outputs.release_enabled == 'true' }}
+    uses: ./.github/workflows/nix.yml
+    secrets: inherit
+    permissions:
+      contents: read
+
+  # Publish from the build artifact so a signing or repository failure blocks
+  # the public GitHub Release instead of turning it red after publication.
+  publish-flatpak:
+    needs:
+      - metadata
+      - build-flatpak
+    if: ${{ needs.metadata.outputs.prerelease != 'true' && needs.metadata.outputs.flatpak_publish_enabled == 'true' }}
+    uses: ./.github/workflows/publish-flatpak.yml
+    with:
+      version: ${{ needs.metadata.outputs.version }}
+      tag: ${{ needs.metadata.outputs.tag }}
+      artifact_name: artifacts-linux-flatpak
+    secrets: inherit
+    permissions:
+      contents: read
+
   github-release:
     needs:
       - metadata
@@ -298,6 +328,8 @@ jobs:
       - build-windows
       - build-linux
       - build-flatpak
+      - verify-nix
+      - publish-flatpak
     if: >-
       ${{
         always() &&
@@ -306,7 +338,9 @@ jobs:
         (needs.build-macos.result == 'success' || needs.build-macos.result == 'skipped') &&
         (needs.build-windows.result == 'success' || needs.build-windows.result == 'skipped') &&
         (needs.build-linux.result == 'success' || needs.build-linux.result == 'skipped') &&
-        (needs.build-flatpak.result == 'success' || needs.build-flatpak.result == 'skipped')
+        (needs.build-flatpak.result == 'success' || needs.build-flatpak.result == 'skipped') &&
+        (needs.verify-nix.result == 'success' || needs.verify-nix.result == 'skipped') &&
+        (needs.publish-flatpak.result == 'success' || needs.publish-flatpak.result == 'skipped')
       }}
     runs-on: ubuntu-22.04
     permissions:
@@ -365,19 +399,6 @@ jobs:
       - github-release
     if: ${{ needs.metadata.outputs.prerelease != 'true' && needs.metadata.outputs.homebrew_enabled == 'true' }}
     uses: ./.github/workflows/publish-homebrew.yml
-    with:
-      version: ${{ needs.metadata.outputs.version }}
-      tag: ${{ needs.metadata.outputs.tag }}
-    secrets: inherit
-    permissions:
-      contents: read
-
-  publish-flatpak:
-    needs:
-      - metadata
-      - github-release
-    if: ${{ needs.metadata.outputs.prerelease != 'true' && needs.metadata.outputs.flatpak_publish_enabled == 'true' }}
-    uses: ./.github/workflows/publish-flatpak.yml
     with:
       version: ${{ needs.metadata.outputs.version }}
       tag: ${{ needs.metadata.outputs.tag }}

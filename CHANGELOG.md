@@ -8,6 +8,22 @@ The format is based on [Keep a Changelog], and this project follows
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+### Changed
+
+- **Release:** Require the Nix matrix and enabled stable Flatpak repository
+  publication to succeed before creating the public GitHub Release. Keep the
+  release commit and tag pushes separate so main-branch checks can finish
+  before the tag starts publication.
+
+### Fixed
+
+- **Packaging/Flatpak:** Pass the target architecture through `build-sign`'s
+  `--arch` option instead of as an invalid positional argument.
+- **Packaging/Nix:** Create the Linux D-Bus service destination before
+  substitution, and use pinned upstream Nix to build the Intel macOS output on
+  a native Intel runner now that Determinate no longer ships an Intel-host
+  installer.
+
 ## [0.1.4] - 2026-08-16
 
 ### Added

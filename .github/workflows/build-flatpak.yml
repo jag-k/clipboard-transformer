@@ -71,8 +71,10 @@ jobs:
             sed -nE 's/.*<release version="([^"]+)" date="[^"]+".*/\1/p' \
               package/flatpak/dev.jag_k.clipboard_transformer.metainfo.xml
           )"
-          if [[ "${version}" != "${cargo_version}" \
-            || "${version}" != "${metainfo_version}" ]]; then
+          if [[ "${version}" == "${cargo_version}" && \
+            "${version}" == "${metainfo_version}" ]]; then
+            :
+          else
             echo "Release (${version}), Cargo.toml (${cargo_version}), and Flatpak metadata (${metainfo_version}) versions must match" >&2
             exit 1
           fi
