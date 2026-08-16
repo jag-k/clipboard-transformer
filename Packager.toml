@@ -2,7 +2,7 @@
 
 name = "clipboard-transformer"
 productName = "Clipboard Transformer"
-version = "0.1.4"
+version = "0.1.5"
 identifier = "dev.jag-k.clipboard-transformer"
 description = "Rule-based clipboard transformer"
 homepage = "https://github.com/jag-k/clipboard-transformer"
