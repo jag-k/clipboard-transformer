@@ -7,7 +7,7 @@ or diagnostics.
 
 Choose the operating system first. Package managers and update-capable methods
 come before direct release downloads in each section.
-Direct links below target **v0.1.3**.
+Direct links below target **v0.1.4**.
 
 ## macOS
 
@@ -56,8 +56,8 @@ Manager can expose the immutable bundle through managed application symlinks.
 
 | Architecture | Desktop application | Standalone CLI |
 | --- | --- | --- |
-| Apple Silicon | [DMG](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-0.1.3-aarch64-apple-darwin.dmg) · [app ZIP](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-0.1.3-aarch64-apple-darwin.app.zip) | [CLI archive](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-cli-0.1.3-aarch64-apple-darwin.tar.xz) |
-| Intel | [DMG](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-0.1.3-x86_64-apple-darwin.dmg) · [app ZIP](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-0.1.3-x86_64-apple-darwin.app.zip) | [CLI archive](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-cli-0.1.3-x86_64-apple-darwin.tar.xz) |
+| Apple Silicon | [DMG](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.4/clipboard-transformer-0.1.4-aarch64-apple-darwin.dmg) · [app ZIP](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.4/clipboard-transformer-0.1.4-aarch64-apple-darwin.app.zip) | [CLI archive](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.4/clipboard-transformer-cli-0.1.4-aarch64-apple-darwin.tar.xz) |
+| Intel | [DMG](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.4/clipboard-transformer-0.1.4-x86_64-apple-darwin.dmg) · [app ZIP](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.4/clipboard-transformer-0.1.4-x86_64-apple-darwin.app.zip) | [CLI archive](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.4/clipboard-transformer-cli-0.1.4-x86_64-apple-darwin.tar.xz) |
 
 Open the DMG and copy **Clipboard Transformer** to **Applications**. The
 `.app.zip` is an alternative app-only download.
@@ -104,10 +104,10 @@ All current Windows builds target x86-64.
 
 | Format | Contents | Download |
 | --- | --- | --- |
-| MSI installer | Desktop app + CLI | [MSI](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-0.1.3-x86_64.msi) |
-| Portable ZIP | Desktop app + CLI | [ZIP](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-0.1.3-x86_64-windows-portable.zip) |
-| Portable GUI | Desktop app only | [EXE](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-app-0.1.3-x86_64.exe) |
-| Portable CLI | CLI only | [EXE](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-cli-0.1.3-x86_64.exe) |
+| MSI installer | Desktop app + CLI | [MSI](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.4/clipboard-transformer-0.1.4-x86_64.msi) |
+| Portable ZIP | Desktop app + CLI | [ZIP](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.4/clipboard-transformer-0.1.4-x86_64-windows-portable.zip) |
+| Portable GUI | Desktop app only | [EXE](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.4/clipboard-transformer-app-0.1.4-x86_64.exe) |
+| Portable CLI | CLI only | [EXE](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.4/clipboard-transformer-cli-0.1.4-x86_64.exe) |
 
 The MSI installs the tray application, Start menu entry, toast activation
 support, and the standalone CLI. Its PATH option makes
@@ -268,11 +268,11 @@ The current direct Linux artifacts target x86-64.
 
 | Format | Contents | Download |
 | --- | --- | --- |
-| AppImage | Desktop app only | [AppImage](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-app_0.1.3_x86_64.AppImage) |
-| Debian package | Desktop app + CLI | [DEB](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-app_0.1.3_amd64.deb) |
-| RPM package | Desktop app + CLI | [RPM](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-0.1.3-1.x86_64.rpm) |
-| Pacman package | Desktop app + CLI | [archive](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-app_0.1.3_x86_64.tar.gz) |
-| CLI archive | CLI only | [archive](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.3/clipboard-transformer-cli-0.1.3-x86_64-linux.tar.xz) |
+| AppImage | Desktop app only | [AppImage](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.4/clipboard-transformer-app_0.1.4_x86_64.AppImage) |
+| Debian package | Desktop app + CLI | [DEB](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.4/clipboard-transformer-app_0.1.4_amd64.deb) |
+| RPM package | Desktop app + CLI | [RPM](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.4/clipboard-transformer-0.1.4-1.x86_64.rpm) |
+| Pacman package | Desktop app + CLI | [archive](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.4/clipboard-transformer-app_0.1.4_x86_64.tar.gz) |
+| CLI archive | CLI only | [archive](https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.4/clipboard-transformer-cli-0.1.4-x86_64-linux.tar.xz) |
 
 Flatpak-enabled releases also attach
 `clipboard-transformer-<version>-x86_64.flatpak` to the matching

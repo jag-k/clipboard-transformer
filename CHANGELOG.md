@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog], and this project follows
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+## [0.1.4] - 2026-08-16
+
 ### Added
 
 - **Desktop/Notifications:** Add independent `config.notifications` preferences
@@ -168,7 +170,8 @@ The format is based on [Keep a Changelog], and this project follows
   AUR, and WinGet publishing.
 
 <!-- next-url -->
-[Unreleased]: https://github.com/jag-k/clipboard-transformer/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/jag-k/clipboard-transformer/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/jag-k/clipboard-transformer/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/jag-k/clipboard-transformer/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/jag-k/clipboard-transformer/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/jag-k/clipboard-transformer/compare/v0.1.0...v0.1.1
