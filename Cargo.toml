@@ -13,7 +13,7 @@ keywords = ["clipboard", "automation", "productivity", "text-processing", "deskt
 
 [workspace.dependencies]
 anyhow = "1.0"
-base64 = "0.22"
+base64 = "0.23"
 chrono = { version = "0.4.45", features = ["unstable-locales"] }
 clap = { version = "4.5", features = ["derive", "env"] }
 ct-runtime = { path = "crates/runtime", default-features = false }
