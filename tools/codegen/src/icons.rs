@@ -104,7 +104,7 @@ fn render_mask(source: &str, size: u32, color: [u8; 3]) -> Result<Vec<u8>> {
         &mut pixmap.as_mut(),
     );
     let mut rgba = pixmap.take();
-    for pixel in rgba.chunks_exact_mut(4) {
+    for pixel in rgba.as_chunks_mut::<4>().0 {
         if pixel[3] != 0 {
             pixel[..3].copy_from_slice(&color);
         }
@@ -114,7 +114,7 @@ fn render_mask(source: &str, size: u32, color: [u8; 3]) -> Result<Vec<u8>> {
 
 fn gray_alpha(rgba: &[u8]) -> Result<Vec<u8>> {
     let mut pixels = Vec::with_capacity(rgba.len() / 2);
-    for pixel in rgba.chunks_exact(4) {
+    for pixel in rgba.as_chunks::<4>().0 {
         if pixel[0] != pixel[1] || pixel[1] != pixel[2] {
             anyhow::bail!("macOS template source rendered non-monochrome pixels");
         }

@@ -17,7 +17,7 @@ use objc2_foundation::{NSObject, NSObjectProtocol, NSSize, NSString};
 
 use crate::{
     accelerator_model, AcceleratorKey, ActionSink, TrayAction, TrayMenuEntry, TrayMenuItem,
-    TrayMenuSource, TrayPlatform,
+    TrayMenuSource, TrayOptions, TrayPlatform,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -116,7 +116,11 @@ pub struct MacosTray {
 }
 
 impl MacosTray {
-    pub fn new(commands: ActionSink, menu_source: TrayMenuSource) -> Result<Self> {
+    pub fn new(
+        commands: ActionSink,
+        menu_source: TrayMenuSource,
+        _options: TrayOptions,
+    ) -> Result<Self> {
         let mtm = MainThreadMarker::new().context("native macOS tray requires the main thread")?;
         // The controller owns the source outright: nothing replaces it, so there
         // is no reason for the tray to keep a second handle.

@@ -22,7 +22,7 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
 
 use crate::{
     accelerator_model, AcceleratorKey, ActionSink, TrayAction, TrayMenuItem, TrayMenuSource,
-    TrayPlatform,
+    TrayOptions, TrayPlatform,
 };
 
 const WM_TRAY_ICON: u32 = 0x8001;
@@ -48,7 +48,11 @@ pub struct WindowsTray {
 }
 
 impl WindowsTray {
-    pub fn new(commands: ActionSink, menu_source: TrayMenuSource) -> Result<Self> {
+    pub fn new(
+        commands: ActionSink,
+        menu_source: TrayMenuSource,
+        _options: TrayOptions,
+    ) -> Result<Self> {
         unsafe {
             let instance = GetModuleHandleW(ptr::null());
             if instance.is_null() {

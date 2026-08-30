@@ -5,7 +5,7 @@ allow-branch = ["main"]
 # every member while root-level replacements run exactly once.
 release = false
 publish = false
-push = true
+push = false
 push-remote = "origin"
 tag = true
 tag-name = "v{{version}}"

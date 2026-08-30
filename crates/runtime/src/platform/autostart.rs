@@ -9,6 +9,8 @@ use auto_launch::MacOSLaunchMode;
 use auto_launch::WindowsEnableMode;
 use auto_launch::{AutoLaunch, AutoLaunchBuilder};
 
+use super::environment::running_in_flatpak;
+
 const APP_NAME: &str = "dev.jag-k.clipboard-transformer";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -81,14 +83,6 @@ fn current_launcher_executable() -> Result<std::path::PathBuf> {
     std::env::current_exe().context("resolve current executable")
 }
 
-fn running_in_flatpak() -> bool {
-    cfg!(target_os = "linux") && identifies_flatpak(std::env::var_os("FLATPAK_ID").as_deref())
-}
-
-fn identifies_flatpak(value: Option<&std::ffi::OsStr>) -> bool {
-    value.is_some_and(|value| !value.is_empty())
-}
-
 fn launcher(executable: &Path) -> Result<AutoLaunch> {
     let executable = executable
         .to_str()
@@ -143,14 +137,5 @@ mod tests {
             format!("\"{}\"", executable.to_str().unwrap())
         );
         assert!(launcher.get_args().is_empty());
-    }
-
-    #[test]
-    fn flatpak_requires_a_non_empty_application_id() {
-        assert!(!identifies_flatpak(None));
-        assert!(!identifies_flatpak(Some(std::ffi::OsStr::new(""))));
-        assert!(identifies_flatpak(Some(std::ffi::OsStr::new(
-            "dev.jag_k.clipboard_transformer"
-        ))));
     }
 }

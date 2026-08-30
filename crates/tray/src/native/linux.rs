@@ -4,7 +4,7 @@ use ksni::menu::{CheckmarkItem, StandardItem, SubMenu};
 
 use crate::{
     accelerator_model, AcceleratorKey, ActionSink, TrayAction, TrayMenuItem, TrayMenuSource,
-    TrayPlatform,
+    TrayOptions, TrayPlatform,
 };
 
 struct LinuxTrayState {
@@ -73,21 +73,21 @@ pub struct LinuxTray {
 }
 
 impl LinuxTray {
-    pub fn new(commands: ActionSink, menu_source: TrayMenuSource) -> Result<Self> {
+    pub fn new(
+        commands: ActionSink,
+        menu_source: TrayMenuSource,
+        options: TrayOptions,
+    ) -> Result<Self> {
         let handle = LinuxTrayState {
             commands,
             menu: menu_source,
         }
-        .disable_dbus_name(running_in_flatpak())
+        .disable_dbus_name(options.sandboxed)
         .spawn()
         .context("start native Linux StatusNotifierItem tray")?;
         log::info!("native Linux StatusNotifierItem tray initialized");
         Ok(Self { handle })
     }
-}
-
-fn running_in_flatpak() -> bool {
-    std::env::var_os("FLATPAK_ID").is_some_and(|id| !id.is_empty())
 }
 
 impl Drop for LinuxTray {
