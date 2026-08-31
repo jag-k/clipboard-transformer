@@ -22,7 +22,7 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
 
 use crate::{
     accelerator_model, AcceleratorKey, ActionSink, TrayAction, TrayMenuItem, TrayMenuSource,
-    TrayPlatform,
+    TrayOptions, TrayPlatform,
 };
 
 const WM_TRAY_ICON: u32 = 0x8001;
@@ -48,7 +48,11 @@ pub struct WindowsTray {
 }
 
 impl WindowsTray {
-    pub fn new(commands: ActionSink, menu_source: TrayMenuSource) -> Result<Self> {
+    pub fn new(
+        commands: ActionSink,
+        menu_source: TrayMenuSource,
+        _options: TrayOptions,
+    ) -> Result<Self> {
         unsafe {
             let instance = GetModuleHandleW(ptr::null());
             if instance.is_null() {
@@ -395,7 +399,7 @@ fn create_icon(dark_theme: bool) -> Result<HICON> {
         .rgba8()
         .context("Windows tray icon must use RGBA8 pixels")?
         .to_vec();
-    for pixel in bgra.chunks_exact_mut(4) {
+    for pixel in bgra.as_chunks_mut::<4>().0 {
         pixel.swap(0, 2);
         let alpha = u16::from(pixel[3]);
         for channel in &mut pixel[..3] {

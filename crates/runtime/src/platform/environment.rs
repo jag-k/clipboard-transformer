@@ -761,6 +761,19 @@ pub fn revision() -> u64 {
     ENVIRONMENT_REVISION.load(Ordering::Relaxed)
 }
 
+/// Reports whether the desktop process is running inside a Flatpak sandbox.
+///
+/// Environment detection belongs to the runtime host. Portable native
+/// adapters receive the resulting capability through their options instead of
+/// sampling process state independently.
+pub fn running_in_flatpak() -> bool {
+    cfg!(target_os = "linux") && identifies_flatpak(std::env::var_os("FLATPAK_ID").as_deref())
+}
+
+fn identifies_flatpak(value: Option<&OsStr>) -> bool {
+    value.is_some_and(|value| !value.is_empty())
+}
+
 fn read_dotenv(path: &Path) -> DotenvRead {
     if !path.exists() {
         return DotenvRead::default();
@@ -905,5 +918,19 @@ mod dotenv_tests {
         assert_eq!(ignored.loaded_count, 0);
         assert_eq!(ignored.ignored_count, 1);
         assert!(!dotenv_values().contains_key(OsStr::new(name)));
+    }
+}
+
+#[cfg(test)]
+mod platform_tests {
+    use super::*;
+
+    #[test]
+    fn flatpak_requires_a_non_empty_application_id() {
+        assert!(!identifies_flatpak(None));
+        assert!(!identifies_flatpak(Some(OsStr::new(""))));
+        assert!(identifies_flatpak(Some(OsStr::new(
+            "dev.jag_k.clipboard_transformer"
+        ))));
     }
 }

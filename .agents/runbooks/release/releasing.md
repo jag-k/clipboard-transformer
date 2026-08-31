@@ -30,11 +30,11 @@ verification.
 | macOS arm64/x86_64 | signed, notarized `.dmg` | cargo-packager + custom macOS job | GitHub release workflow | published; DMG ticket stapled |
 | macOS arm64/x86_64 | Homebrew ZIP containing `.app` plus standalone CLI | custom macOS job | GitHub release workflow | published; contains the separately notarized CLI bytes |
 | Homebrew | cask installing the macOS `.app` plus CLI, or the Linux x86_64 AppImage plus CLI | release workflow | `jag-k/homebrew-tap` | published; Linux install still needs validation |
-| Flatpak remote | signed OSTree repository shared by current and future jag-k applications | release workflow | `jag-k/flatpak-repo` via GitHub Pages | prepared; enable after repository and signing-key bootstrap |
+| Flatpak remote | signed OSTree repository shared by current and future jag-k applications | release workflow | `jag-k/flatpak-repo` via GitHub Pages | published and release-gated |
 | Windows x86_64 | portable `clipboard-transformer-cli-<version>-x86_64.exe` CLI | Cargo/custom job | GitHub release workflow | published; unsigned |
 | Windows x86_64 | portable `clipboard-transformer-app-<version>-x86_64.exe` GUI | Cargo/custom job | GitHub release workflow | published; unsigned |
 | Windows x86_64 | portable ZIP containing GUI, CLI, and icon | Cargo/custom job | GitHub release workflow | published; unsigned |
-| Windows x86_64 | `.msi` | cargo-packager + WiX fragment | GitHub release workflow | published; unsigned; corrected PATH upgrade ownership is pending the next release |
+| Windows x86_64 | `.msi` | cargo-packager + WiX fragment | GitHub release workflow | published; unsigned; PATH upgrade ownership corrected and verified in CI |
 | Scoop | portable ZIP manifest | release workflow | `jag-k/scoop-bucket` | published |
 | WinGet | MSI manifest | `wingetcreate` | custom WinGet job | bootstrap submission required |
 | AUR | prebuilt and source-built package bases | release workflow | Arch User Repository | published |

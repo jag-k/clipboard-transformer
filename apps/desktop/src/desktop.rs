@@ -60,7 +60,14 @@ where
             let actions = tray_actions
                 .take()
                 .expect("tray actions are consumed with the first tray");
-            tray = Some(ct_tray::native::Tray::new(actions, tray_state.source())?);
+            let options = ct_tray::TrayOptions {
+                sandboxed: ct_runtime::platform::environment::running_in_flatpak(),
+            };
+            tray = Some(ct_tray::native::Tray::new(
+                actions,
+                tray_state.source(),
+                options,
+            )?);
         }
         if input.native_events.quit_requested && commands.send(AppCommand::Quit).is_err() {
             return Ok(ct_host_loop::Iteration::quit());
