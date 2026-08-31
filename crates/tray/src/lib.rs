@@ -47,6 +47,14 @@ pub type ActionSink = Box<dyn Fn(TrayAction) + Send>;
 #[cfg(feature = "native")]
 pub type TrayMenuSource = Box<dyn Fn() -> TrayMenu + Send>;
 
+/// Host-owned environment facts needed by a native tray backend.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct TrayOptions {
+    /// Whether the application is running inside an OS sandbox such as
+    /// Flatpak, where the backend must not claim its own well-known D-Bus name.
+    pub sandboxed: bool,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PixelFormat {
     Rgba8,

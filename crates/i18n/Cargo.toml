@@ -14,4 +14,4 @@ publish = false
 chrono.workspace = true
 isolang = "2.4"
 sys-locale = "0.3"
-timeago = { version = "0.5", features = ["isolang"] }
+timeago = { version = "0.6", features = ["isolang"] }

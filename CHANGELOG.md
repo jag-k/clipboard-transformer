@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog], and this project follows
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+### Fixed
+
+- **CI:** Keep tray icon code generation clean under the Rust 1.98 Clippy
+  slice-chunking lints.
+- **Release:** Keep `cargo-release` from pushing the release commit and tag
+  together so required main-branch checks can finish before publication.
+- **Linux/Tray:** Detect Flatpak once in the runtime host and pass the sandbox
+  state into the tray backend instead of sampling the environment twice.
+
 ## [0.1.5] - 2026-08-16
 
 ### Changed
