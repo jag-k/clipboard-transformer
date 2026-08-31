@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog], and this project follows
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+### Changed
+
+- **Dependencies:** Update `clap`, `zbus`, `timeago`, and `schemars`. Keep the
+  plugin-author and runtime configuration schemas on draft-07 and byte-compatible
+  across the Schemars migration.
+- **Packaging/Nix:** Refresh the pinned `cachix/install-nix-action` v31
+  revision.
+
 ### Fixed
 
 - **Developer tooling:** Point `just gen-config-schema` at the current
