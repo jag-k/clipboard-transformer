@@ -131,6 +131,13 @@ pub struct TrayPlugin {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TrayGroup {
+    pub id: String,
+    pub label: String,
+    pub enabled: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TraySnapshot {
     pub recent: Vec<TrayRecentItem>,
     pub rule_count: usize,
@@ -142,6 +149,9 @@ pub struct TraySnapshot {
     pub disable_for: u64,
     pub autostart: AutostartStatus,
     pub paused: bool,
+    pub groups: Vec<TrayGroup>,
+    pub group_overflow: usize,
+    pub group_state_error: Option<String>,
 }
 
 fn tray_info_lines(snapshot: &TraySnapshot) -> Vec<String> {
@@ -153,6 +163,9 @@ fn tray_info_lines(snapshot: &TraySnapshot) -> Vec<String> {
             snapshot.rule_count, snapshot.source_count
         )
     }];
+    if let Some(error) = &snapshot.group_state_error {
+        lines.push(format!("Group state error: {}", one_line(error, 100)));
+    }
     lines.extend(
         snapshot
             .config_warnings
@@ -349,6 +362,9 @@ mod tests {
             disable_for: 0,
             autostart: AutostartStatus::Unsupported,
             paused: false,
+            groups: Vec::new(),
+            group_overflow: 0,
+            group_state_error: None,
         }
     }
 

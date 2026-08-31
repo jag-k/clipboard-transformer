@@ -29,11 +29,16 @@ rules:
 Every real rule requires a non-empty `id`. Shared optional fields:
 
 - `name`: display label, falling back to `id`;
+- `groups`: list of group ids the rule belongs to;
 - `formats`: ordered input priority for text transforms, or presence filter for
   rulesets;
 - `apps`: source app bundle ids, executable names, or display names;
 - `app_mode`: required with non-empty `apps`; `blacklist` skips matches and
   `whitelist` permits only matches.
+
+A `groups` value on a ruleset is inherited by its descendants. An import edge
+may also add `groups` to every rule it imports and strip imported groups with
+`ignore_imported_groups: [id, ...]` or `ignore_imported_groups: true`.
 
 An omitted or empty `formats` defaults to `[text]`. Portable aliases include
 `text`/`plain-text`, `url`, `html`, `rtf`, and `file`/`file-url`; exact native
@@ -132,3 +137,39 @@ Modes:
 
 Disabled children are skipped. `pipeline` and `full-pipeline` are invalid old
 names; migrate them to `all-matching` and `all`.
+
+## Groups
+
+Top-level `groups` descriptors attach presentation metadata and mutability to
+group ids:
+
+```yaml
+groups:
+  privacy:
+    name: Privacy
+    description: Removes tracking parameters
+    status: visible
+```
+
+- `status: visible` — functional and mutable from the tray or CLI;
+- `status: hidden` — functional and mutable from the CLI, but not shown in the
+  tray;
+- `status: ignore` — removed from evaluation and cannot be toggled.
+
+Undeclared groups are active by default, use the group id as their label, and
+are not shown in the tray.
+
+Group descriptors can be imported from other files with top-level
+`group_imports`. Imported descriptors default to `status: hidden` unless the
+import edge sets a different status. Root descriptors win over imports; later
+imports win over earlier imports. Repeated rule-import edges merge their group
+annotations onto the single deduplicated rule copy.
+
+Group state is stored in `<state_dir>/groups.json`. The CLI `groups list`,
+`groups enable`, and `groups disable` read or mutate this state. Use
+`--group-state <path>` to select a file and `--ignore-group-state` to ignore it.
+Writers lock and atomically update the latest document; if the file is
+malformed, an explicit write overwrites it from the last in-memory snapshot (or
+a fresh empty state). The desktop watches state independently from
+configuration, retains the last valid state on parse failure, and fails closed
+for grouped rules when startup state is malformed.

@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog], and this project follows
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+### Added
+
+- **Rule groups:** Add `groups` and `group_imports` to the configuration, a
+  versioned `<state_dir>/groups.json` state document, tray switches for visible
+  groups, and `groups list` / `enable` / `disable` CLI commands. Group
+  membership is inherited from rulesets and import edges; ignored groups and
+  explicit group state disable the rules that depend on them.
+
 ### Changed
 
 - **Dependencies:** Update `clap`, `zbus`, `timeago`, and `schemars`. Keep the

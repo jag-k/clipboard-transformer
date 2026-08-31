@@ -62,6 +62,7 @@ The active file set is:
 | `<config_dir>/clipboard-transformer.schema.json` | Generated editor schema. |
 | `<config_dir>/plugins/*.wasm` | Discovered plugins. |
 | `<state_dir>/url-imports/` | Remote import cache. |
+| `<state_dir>/groups.json` | Group enablement state. |
 | `<state_dir>/clipboard-transformer.log` | Runtime log. |
 | `<state_dir>/history.cbor` | Recent transformation history. |
 
@@ -99,6 +100,7 @@ tray. Startup, runtime, and reload failure notifications remain enabled.
 Every real rule requires a stable, non-empty `id`. Common optional fields:
 
 - `name`: display label; falls back to `id`;
+- `groups`: list of group ids the rule belongs to;
 - `formats`: ordered input priority for text rules, or presence filter for a
   ruleset;
 - `apps`: source application identifiers;
@@ -108,6 +110,88 @@ Portable format aliases include `text`, `url`, `html`, `rtf`, and `file`.
 Exact native identifiers printed by
 `clipboard-transformer clipboard inspect` are also accepted. An omitted or
 empty `formats` list defaults to `[text]`.
+
+## Groups
+
+Groups are a compact way to enable and disable related rules together. They
+live in a flat global namespace; published packages should namespace their ids,
+for example `@url-cleaner/privacy`.
+
+```yaml
+# $schema: ./clipboard-transformer.schema.json
+
+groups:
+  privacy:
+    name: Privacy
+    description: Removes tracking parameters and advertising identifiers
+    status: visible
+
+rules:
+  - type: url-cleanup
+    id: remove-tracking
+    groups: [privacy]
+    remove_query_prefixes: [utm_]
+```
+
+Rules, rulesets, and import edges may all carry `groups`. Membership is
+additive: a ruleset's groups are inherited by its children, and import edge
+groups are added to every rule imported through that edge. Set
+`ignore_imported_groups: [id, ...]` or `ignore_imported_groups: true` on an
+import to strip groups from the imported document before the edge groups are
+applied.
+
+A group descriptor controls presentation and default mutability:
+
+- `status: visible` — functional and mutable from the tray or CLI;
+- `status: hidden` — functional and mutable from the CLI, but not shown in the
+  tray;
+- `status: ignore` — removed from evaluation and cannot be enabled.
+
+Undeclared groups used by rules are active by default and use the group id as
+their label. They are functional but not shown in the tray.
+
+Group descriptors can also be imported from other YAML/TOML files using
+top-level `group_imports`. Imported descriptors default to `status: hidden`
+unless the import edge sets a different status. Root descriptors always win;
+between imports, a later entry overrides an earlier entry. Conflicting imported
+descriptors produce a source-aware validation warning, and descriptor files are
+watched like rule imports.
+
+```yaml
+group_imports:
+  - source: shared-groups.yaml
+    status: hidden
+```
+
+Group enablement state is stored in `<state_dir>/groups.json` as local,
+versioned JSON. Toggle it with the CLI or the desktop tray:
+
+```sh
+clipboard-transformer groups list
+clipboard-transformer groups enable privacy
+clipboard-transformer groups disable privacy
+```
+
+Use `--group-state <path>` to select a state file and `--ignore-group-state` to
+disable group state for one command. CLI and desktop updates use a shared
+atomic read-modify-write lock, so concurrent toggles preserve unrelated group
+changes.
+
+Malformed state is never used for rule evaluation. The CLI reports the concrete
+file and suggests repair, deletion, or `--ignore-group-state` for read-only
+commands. An explicit `groups enable` or `groups disable`, or a tray toggle,
+treats the state file as app-owned and rewrites it from the last in-memory
+snapshot (or a fresh empty state if no snapshot has been loaded), then logs a
+warning. The desktop keeps the last valid state in memory; if startup has no
+valid state, grouped rules remain disabled until the file is repaired or an
+explicit toggle rewrites it. State-file changes are watched separately from
+configuration, so repairs and CLI toggles still apply while the authored config
+is temporarily invalid.
+
+The tray displays at most 64 visible group switches. Additional switches keep
+their runtime semantics and are reported by a diagnostic row that opens the
+config; they are never silently promoted, dropped from evaluation, or treated
+as disabled.
 
 ## Environment
 

@@ -285,6 +285,8 @@ mod tests {
             NoopNotificationBackend::default(),
             ConfigDocument {
                 plugins: Default::default(),
+                groups: Default::default(),
+                group_imports: Default::default(),
                 config: AppConfig {
                     persist_last_clipboard: true,
                     ..AppConfig::default()
@@ -461,6 +463,8 @@ mod tests {
             NoopNotificationBackend::default(),
             ConfigDocument {
                 plugins: Default::default(),
+                groups: Default::default(),
+                group_imports: Default::default(),
                 config: AppConfig {
                     persist_last_clipboard: true,
                     ..AppConfig::default()
@@ -521,6 +525,8 @@ mod tests {
             NoopNotificationBackend::default(),
             ConfigDocument {
                 plugins: Default::default(),
+                groups: Default::default(),
+                group_imports: Default::default(),
                 config: AppConfig::default(),
                 rules: Vec::new(),
             },
@@ -601,6 +607,8 @@ mod tests {
             NoopNotificationBackend::default(),
             ConfigDocument {
                 plugins: Default::default(),
+                groups: Default::default(),
+                group_imports: Default::default(),
                 config: AppConfig::default(),
                 rules: Vec::new(),
             },

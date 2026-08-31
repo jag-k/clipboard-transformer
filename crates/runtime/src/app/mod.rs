@@ -6,17 +6,18 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use uuid::Uuid;
 
 use crate::config::{ConfigDocument, ConfigWarning, EditorConfig, RuleSource};
+use crate::groups::GroupPolicy;
 use crate::logging;
 use crate::platform::autostart::AutostartStatus;
 use crate::platform::tray::{TrayRecentItem, TrayRule, TraySnapshot};
 use crate::rules::{RuleWorker, RuleWorkerCompletion};
 use crate::state::{
     quarantine_corrupt_file, remove_corrupt_file, ClipboardChangeKind, ClipboardWriteGuard,
-    HistoryRecord, HistoryRule, HistoryWriter, LastClipboardSnapshot, LastTransform,
+    GroupState, HistoryRecord, HistoryRule, HistoryWriter, LastClipboardSnapshot, LastTransform,
     PersistentAppState, PersistentHistory, UndoState,
 };
 use ct_clipboard::{ClipboardBackend, ClipboardFingerprint, ClipboardFormat, ClipboardItem};
@@ -65,6 +66,11 @@ pub struct Agent<C, N> {
     history_writer: Option<HistoryWriter>,
     history_index: VecDeque<(Uuid, usize)>,
     paused: bool,
+    group_policy: GroupPolicy,
+    group_state: GroupState,
+    group_state_path: Option<PathBuf>,
+    group_state_loaded: bool,
+    group_state_error: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -137,6 +143,11 @@ pub enum AppCommand {
     ClearHistory,
     SetAutostart(bool),
     SetPaused(bool),
+    SetGroupEnabled {
+        group_id: String,
+        enabled: bool,
+    },
+    ReloadGroupState,
     Quit,
 }
 
@@ -157,6 +168,9 @@ impl From<ct_tray::TrayAction> for AppCommand {
             Action::ClearHistory => Self::ClearHistory,
             Action::SetAutostart(enabled) => Self::SetAutostart(enabled),
             Action::SetPaused(paused) => Self::SetPaused(paused),
+            Action::SetGroupEnabled { group_id, enabled } => {
+                Self::SetGroupEnabled { group_id, enabled }
+            }
             Action::Quit => Self::Quit,
         }
     }
@@ -209,6 +223,7 @@ where
         let tray_rule_count = engine.rule_count();
         let required_formats = engine.required_formats().clone();
         let rule_worker = RuleWorker::start(engine)?;
+        let group_policy = GroupPolicy::from_document(&config);
         // The worker owns the compiled rules. Keeping the complete imported
         // RawRule tree in Agent duplicates large rule lists for no runtime
         // benefit; ConfigReloader retains the source document it needs for
@@ -248,6 +263,11 @@ where
             history_writer: None,
             history_index: VecDeque::new(),
             paused: false,
+            group_policy,
+            group_state: GroupState::default(),
+            group_state_path: None,
+            group_state_loaded: false,
+            group_state_error: None,
         })
     }
 
@@ -419,7 +439,89 @@ where
         Ok(())
     }
 
+    pub fn load_group_state(&mut self, state_dir: &Path) -> Result<()> {
+        let path = state_dir.join(GroupState::FILE_NAME);
+        self.group_state_path = Some(path.clone());
+        match crate::groups::load_group_state(Some(&path)) {
+            Ok(state) => {
+                self.group_state = state;
+                self.group_state_loaded = true;
+                self.group_state_error = None;
+                Ok(())
+            }
+            Err(error) => {
+                self.group_state_loaded = false;
+                self.group_state_error = Some(format!("{error:#}"));
+                Err(error)
+            }
+        }
+    }
+
+    pub fn reload_group_state(&mut self) -> bool {
+        let Some(path) = &self.group_state_path else {
+            return false;
+        };
+        match crate::groups::load_group_state(Some(path)) {
+            Ok(state) => {
+                let changed = !self.group_state_loaded
+                    || self.group_state != state
+                    || self.group_state_error.is_some();
+                if changed {
+                    self.group_state = state;
+                    self.group_state_loaded = true;
+                    self.group_state_error = None;
+                    self.rule_epoch = self.rule_epoch.wrapping_add(1).max(1);
+                    self.queued_rule_job = None;
+                }
+                changed
+            }
+            Err(error) => {
+                let error = format!("{error:#}");
+                let changed = self.group_state_error.as_deref() != Some(error.as_str());
+                self.group_state_error = Some(error.clone());
+                logging::event(format!(
+                    "group state reload failed, keeping current state: {error}"
+                ));
+                changed
+            }
+        }
+    }
+
+    pub fn set_group_enabled(&mut self, group_id: &str, enabled: bool) -> Result<()> {
+        if self.group_policy.is_ignored(group_id) {
+            anyhow::bail!("group {group_id:?} is ignored and cannot be toggled");
+        }
+        let path = self
+            .group_state_path
+            .as_deref()
+            .context("group state path is unavailable")?;
+        let fallback = self.group_state_loaded.then_some(&self.group_state);
+        let update = crate::groups::update_group_state(path, group_id, enabled, fallback)?;
+        if let Some(error) = &update.recovered_from {
+            logging::event(format!(
+                "group state repaired from the last in-memory snapshot after an explicit user change: {error}"
+            ));
+        }
+        self.group_state = update.state;
+        self.group_state_loaded = true;
+        self.group_state_error = None;
+        self.rule_epoch = self.rule_epoch.wrapping_add(1).max(1);
+        self.queued_rule_job = None;
+        Ok(())
+    }
+
     pub fn tray_snapshot(&self) -> TraySnapshot {
+        let (visible_groups, group_overflow) = self
+            .group_policy
+            .visible_groups(crate::groups::MAX_VISIBLE_TRAY_GROUPS);
+        let groups = visible_groups
+            .into_iter()
+            .map(|(id, descriptor)| {
+                let label = descriptor.name.clone().unwrap_or_else(|| id.clone());
+                let enabled = self.group_state_loaded && self.group_state.is_enabled(&id);
+                crate::platform::tray::TrayGroup { id, label, enabled }
+            })
+            .collect();
         TraySnapshot {
             recent: self
                 .recent_transforms
@@ -461,6 +563,9 @@ where
             disable_for: self.config.config.disable_for,
             autostart: self.autostart_status.clone(),
             paused: self.paused,
+            groups,
+            group_overflow,
+            group_state_error: self.group_state_error.clone(),
         }
     }
 
@@ -629,7 +734,12 @@ where
         }
         let now = SystemTime::now();
         self.disabled_rules.retain(|_, until| *until > now);
-        let disabled_rule_ids = self.disabled_rules.keys().cloned().collect::<BTreeSet<_>>();
+        let mut disabled_rule_ids = self.disabled_rules.keys().cloned().collect::<BTreeSet<_>>();
+        disabled_rule_ids.extend(if self.group_state_loaded {
+            self.group_policy.disabled_rule_ids(&self.group_state)
+        } else {
+            self.group_policy.controlled_rule_ids()
+        });
         if !self
             .required_formats
             .iter()
@@ -945,6 +1055,14 @@ where
                 self.persist_state_best_effort();
                 Ok(Vec::new())
             }
+            AppCommand::SetGroupEnabled { group_id, enabled } => {
+                self.set_group_enabled(&group_id, enabled)?;
+                Ok(Vec::new())
+            }
+            AppCommand::ReloadGroupState => {
+                self.reload_group_state();
+                Ok(Vec::new())
+            }
             AppCommand::Quit => Ok(vec![AppEffect::Quit]),
         }
     }
@@ -1048,6 +1166,7 @@ where
                 self.rule_epoch = self.rule_epoch.wrapping_add(1);
                 self.queued_rule_job = None;
                 self.app_matcher = app_matcher;
+                self.group_policy = GroupPolicy::from_document(&config);
                 config.rules.clear();
                 self.configure_last_clipboard_persistence(config.config.persist_last_clipboard);
                 self.config = config;
@@ -1521,6 +1640,8 @@ mod tests {
     fn config() -> ConfigDocument {
         ConfigDocument {
             plugins: Default::default(),
+            groups: Default::default(),
+            group_imports: Default::default(),
             config: AppConfig::default(),
             rules: vec![RawRule {
                 id: "rule".into(),
@@ -1543,6 +1664,80 @@ mod tests {
 
         assert!(agent.config.rules.is_empty());
         assert!(agent.tray_rule_count > 0);
+    }
+
+    #[test]
+    fn malformed_initial_group_state_fails_closed_and_user_change_replaces_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(GroupState::FILE_NAME);
+        std::fs::write(&path, b"broken").unwrap();
+        let mut document = config();
+        document.groups.insert(
+            "privacy".into(),
+            crate::config::GroupDescriptor {
+                status: crate::config::GroupStatus::Visible,
+                ..crate::config::GroupDescriptor::default()
+            },
+        );
+        document.rules[0].groups.push("privacy".into());
+        let mut agent = Agent::new(
+            MemoryClipboardBackend::new(None),
+            NoopNotificationBackend::default(),
+            document,
+        )
+        .unwrap();
+
+        assert!(agent.load_group_state(dir.path()).is_err());
+        assert_eq!(agent.group_state_path.as_deref(), Some(path.as_path()));
+        let job = agent
+            .prepare_rule_job(ClipboardItem::from_text("cat"))
+            .unwrap()
+            .unwrap();
+        assert!(job.disabled_rule_ids.contains("rule"));
+        assert!(agent.tray_snapshot().group_state_error.is_some());
+
+        agent.set_group_enabled("privacy", true).unwrap();
+        assert!(GroupState::load(&path).unwrap().is_enabled("privacy"));
+        let job = agent
+            .prepare_rule_job(ClipboardItem::from_text("cat again"))
+            .unwrap()
+            .unwrap();
+        assert!(!job.disabled_rule_ids.contains("rule"));
+        assert!(agent.tray_snapshot().group_state_error.is_none());
+    }
+
+    #[test]
+    fn user_change_replaces_malformed_state_from_the_last_known_good_snapshot() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(GroupState::FILE_NAME);
+        let mut state = GroupState {
+            version: GroupState::VERSION,
+            ..GroupState::default()
+        };
+        state.set_enabled("privacy", false);
+        state.set_enabled("other", false);
+        state.save(&path).unwrap();
+        let mut document = config();
+        document.rules[0].groups.push("privacy".into());
+        let mut agent = Agent::new(
+            MemoryClipboardBackend::new(None),
+            NoopNotificationBackend::default(),
+            document,
+        )
+        .unwrap();
+        agent.load_group_state(dir.path()).unwrap();
+
+        std::fs::write(&path, b"broken").unwrap();
+        assert!(agent.reload_group_state());
+        assert!(!agent.group_state.is_enabled("privacy"));
+        assert!(agent.group_state_loaded);
+        assert!(agent.group_state_error.is_some());
+
+        agent.set_group_enabled("privacy", true).unwrap();
+        let repaired = GroupState::load(&path).unwrap();
+        assert!(repaired.is_enabled("privacy"));
+        assert!(!repaired.is_enabled("other"));
+        assert!(agent.group_state_error.is_none());
     }
 
     fn wait_for_rule_worker(agent: &mut Agent<MemoryClipboardBackend, NoopNotificationBackend>) {
@@ -1685,6 +1880,8 @@ mod tests {
         let notifications = NoopNotificationBackend::default();
         let config = ConfigDocument {
             plugins: Default::default(),
+            groups: Default::default(),
+            group_imports: Default::default(),
             config: AppConfig {
                 apps: vec!["com.example.Ignored".into()],
                 app_mode: Some(AppMode::Blacklist),
@@ -1735,6 +1932,8 @@ mod tests {
         let notifications = NoopNotificationBackend::default();
         let config = ConfigDocument {
             plugins: Default::default(),
+            groups: Default::default(),
+            group_imports: Default::default(),
             config: AppConfig {
                 apps: vec!["Allowed".into()],
                 app_mode: Some(AppMode::Whitelist),
@@ -1764,6 +1963,8 @@ mod tests {
         let notifications = NoopNotificationBackend::default();
         let config = ConfigDocument {
             plugins: Default::default(),
+            groups: Default::default(),
+            group_imports: Default::default(),
             config: AppConfig {
                 apps: vec!["com.example.App".into()],
                 ..AppConfig::default()
@@ -1806,6 +2007,8 @@ mod tests {
         let notifications = NoopNotificationBackend::default();
         let config = ConfigDocument {
             plugins: Default::default(),
+            groups: Default::default(),
+            group_imports: Default::default(),
             config: AppConfig::default(),
             rules: vec![
                 RawRule {
@@ -1885,6 +2088,8 @@ mod tests {
         let notifications = NoopNotificationBackend::default();
         let config = ConfigDocument {
             plugins: Default::default(),
+            groups: Default::default(),
+            group_imports: Default::default(),
             config: AppConfig::default(),
             rules: vec![RawRule {
                 id: "trim-protocol-example".into(),

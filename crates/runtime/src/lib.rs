@@ -1,6 +1,7 @@
 #[cfg(feature = "desktop")]
 pub mod app;
 pub mod config;
+pub mod groups;
 pub mod logging;
 pub mod platform;
 pub mod plugins;

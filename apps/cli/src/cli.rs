@@ -11,8 +11,10 @@ use ct_clipboard::{ClipboardBackend, ClipboardItem};
 use ct_core::RuleEngine;
 use ct_runtime::config::{
     ensure_default_config, load_config_with_options, validate_loaded_config,
-    write_config_schema_next_to, ConfigFormat, ConfigLoadOptions, ConfigPaths,
+    write_config_schema_next_to, ConfigFormat, ConfigLoadOptions, ConfigPaths, GroupStatus,
 };
+use ct_runtime::groups::{load_group_state, resolve_group_state_path, update_group_state};
+use ct_runtime::state::GroupState;
 
 #[cfg(target_os = "macos")]
 const APP_BUNDLE_NAME: &str = "Clipboard Transformer.app";
@@ -101,6 +103,15 @@ enum CommandKind {
     Paths,
     /// Diagnose platform capabilities and the resolved installation.
     Doctor,
+    /// List, enable, and disable rule groups.
+    #[command(after_help = "Examples:\n  \
+                      clipboard-transformer groups list\n  \
+                      clipboard-transformer groups enable privacy\n  \
+                      clipboard-transformer groups disable experimental")]
+    Groups {
+        #[command(subcommand)]
+        command: GroupsCommand,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -176,6 +187,12 @@ struct ConfigInputs {
     /// State directory used for the URL import cache.
     #[arg(long, value_name = "PATH", conflicts_with = "config")]
     state_dir: Option<PathBuf>,
+    /// Use an explicit group-state document.
+    #[arg(long, value_name = "PATH", conflicts_with = "ignore_group_state")]
+    group_state: Option<PathBuf>,
+    /// Use configuration defaults only; do not load group state.
+    #[arg(long, conflicts_with = "group_state")]
+    ignore_group_state: bool,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -255,6 +272,7 @@ struct TransformPipeline {
     engine: RuleEngine,
     app_matcher: ct_core::AppMatcher,
     max_item_bytes: u64,
+    disabled_rule_ids: std::collections::BTreeSet<String>,
 }
 
 struct LoadedCliConfig {
@@ -262,6 +280,8 @@ struct LoadedCliConfig {
     config_path: Option<PathBuf>,
     paths: ConfigPaths,
     catalog: Option<ct_runtime::plugins::PluginCatalog>,
+    group_state: GroupState,
+    group_state_path: Option<PathBuf>,
 }
 
 #[derive(Debug, Subcommand)]
@@ -297,6 +317,31 @@ enum PluginCommand {
     },
     /// Ask a running desktop instance to reload config and plugins.
     Reload,
+}
+
+#[derive(Debug, Subcommand)]
+enum GroupsCommand {
+    /// Show all known groups and their enabled state.
+    List {
+        #[command(flatten)]
+        inputs: ConfigInputs,
+    },
+    /// Enable a group so rules using it can run.
+    Enable {
+        /// Group ID to enable.
+        #[arg(value_name = "ID")]
+        id: String,
+        #[command(flatten)]
+        inputs: ConfigInputs,
+    },
+    /// Disable a group so rules using it are skipped.
+    Disable {
+        /// Group ID to disable.
+        #[arg(value_name = "ID")]
+        id: String,
+        #[command(flatten)]
+        inputs: ConfigInputs,
+    },
 }
 
 pub fn run() -> Result<()> {
@@ -337,6 +382,7 @@ fn run_cli(cli: Cli) -> Result<()> {
             inputs,
         } => transform(source.as_deref(), preview, input_format.as_deref(), inputs),
         CommandKind::Plugin { command } => run_plugin_command(command),
+        CommandKind::Groups { command } => run_groups_command(command),
     }
 }
 
@@ -391,7 +437,7 @@ fn transform_stdin(inputs: ConfigInputs, input_format: Option<&str>) -> Result<(
     };
     let output = pipeline
         .engine
-        .try_apply(&input)?
+        .try_apply_excluding(&input, &pipeline.disabled_rule_ids)?
         .and_then(|result| result.after.text().map(str::to_owned))
         .unwrap_or(stdin);
     std::io::stdout()
@@ -418,7 +464,10 @@ fn transform_clipboard(inputs: ConfigInputs, preview: bool) -> Result<()> {
         return Ok(());
     };
     let input = input.with_optional_source_app(metadata.source_app().cloned());
-    let Some(result) = pipeline.engine.try_apply(&input)? else {
+    let Some(result) = pipeline
+        .engine
+        .try_apply_excluding(&input, &pipeline.disabled_rule_ids)?
+    else {
         println!("no match");
         return Ok(());
     };
@@ -450,9 +499,12 @@ fn load_transform_pipeline(inputs: &ConfigInputs) -> Result<TransformPipeline> {
         config_path,
         paths,
         catalog,
+        group_state,
+        ..
     } = load_cli_config(inputs)?;
     let rule_sources = loaded.rule_sources;
     let document = loaded.document;
+    let disabled_rule_ids = loaded.group_policy.disabled_rule_ids(&group_state);
 
     let app_matcher = document.config.app_matcher()?;
     let max_item_bytes = document.config.max_item_bytes;
@@ -490,10 +542,18 @@ fn load_transform_pipeline(inputs: &ConfigInputs) -> Result<TransformPipeline> {
         engine,
         app_matcher,
         max_item_bytes,
+        disabled_rule_ids,
     })
 }
 
 fn load_cli_config(inputs: &ConfigInputs) -> Result<LoadedCliConfig> {
+    load_cli_config_with_group_state_recovery(inputs, false)
+}
+
+fn load_cli_config_with_group_state_recovery(
+    inputs: &ConfigInputs,
+    recover_invalid_group_state: bool,
+) -> Result<LoadedCliConfig> {
     let mut paths = ConfigPaths::resolve()?;
     if let Some(state_dir) = &inputs.state_dir {
         paths.state_dir = state_dir.clone();
@@ -528,11 +588,28 @@ fn load_cli_config(inputs: &ConfigInputs) -> Result<LoadedCliConfig> {
         )?;
         (loaded, Some(config_path))
     };
+
+    let group_state_path = if inputs.ignore_group_state {
+        None
+    } else {
+        resolve_group_state_path(inputs.group_state.as_deref(), Some(&paths.state_dir))?
+    };
+    let group_state = match load_group_state(group_state_path.as_deref()) {
+        Ok(state) => state,
+        Err(_) if recover_invalid_group_state => GroupState {
+            version: GroupState::VERSION,
+            ..GroupState::default()
+        },
+        Err(error) => return Err(error),
+    };
+
     Ok(LoadedCliConfig {
         loaded,
         config_path,
         paths,
         catalog,
+        group_state,
+        group_state_path,
     })
 }
 
@@ -548,6 +625,12 @@ fn load_rule_catalog_config(inputs: &ConfigInputs) -> Result<LoadedCliConfig> {
                 .plugin_dir
                 .clone()
                 .unwrap_or_else(|| paths.plugins_dir.clone());
+            let group_state_path = if inputs.ignore_group_state {
+                None
+            } else {
+                resolve_group_state_path(inputs.group_state.as_deref(), Some(&paths.state_dir))?
+            };
+            let group_state = load_group_state(group_state_path.as_deref())?;
             return Ok(LoadedCliConfig {
                 loaded: ct_runtime::config::LoadedConfig {
                     document: ct_runtime::config::ConfigDocument::default(),
@@ -555,10 +638,13 @@ fn load_rule_catalog_config(inputs: &ConfigInputs) -> Result<LoadedCliConfig> {
                     remote_imports: Default::default(),
                     rule_sources: Default::default(),
                     warnings: Vec::new(),
+                    group_policy: Default::default(),
                 },
                 config_path: None,
                 paths,
                 catalog: Some(ct_runtime::plugins::PluginCatalog::discover(&plugin_dir)),
+                group_state,
+                group_state_path,
             });
         }
     }
@@ -617,7 +703,11 @@ fn watch_clipboard(
             let item = item.with_optional_source_app(metadata.source_app().cloned());
             let transformed = pipeline
                 .as_mut()
-                .map(|pipeline| pipeline.engine.try_apply(&item))
+                .map(|pipeline| {
+                    pipeline
+                        .engine
+                        .try_apply_excluding(&item, &pipeline.disabled_rule_ids)
+                })
                 .transpose()?
                 .flatten();
             if transform == Some(WatchTransformMode::TransformedOnly) && transformed.is_none() {
@@ -947,7 +1037,7 @@ fn effective_rules_view(
         .document
         .rules
         .iter()
-        .map(effective_rule_value)
+        .map(|rule| effective_rule_value(rule, &loaded.group_policy))
         .collect::<Vec<_>>();
     let warnings = loaded
         .warnings
@@ -961,17 +1051,28 @@ fn effective_rules_view(
         "sources": &loaded.sources,
         "rule_sources": &loaded.rule_sources,
         "warnings": warnings,
+        "groups": &loaded.group_policy.descriptors,
         "rules": rules,
     })
 }
 
-fn effective_rule_value(rule: &ct_core::RawRule) -> serde_json::Value {
+fn effective_rule_value(
+    rule: &ct_core::RawRule,
+    group_policy: &ct_runtime::groups::GroupPolicy,
+) -> serde_json::Value {
     let kind = rule.kind.as_deref().unwrap_or("regexp");
     let mut object = serde_json::Map::new();
     object.insert("type".into(), serde_json::Value::String(kind.to_string()));
     object.insert("id".into(), serde_json::Value::String(rule.id.clone()));
     if let Some(name) = &rule.name {
         object.insert("name".into(), serde_json::Value::String(name.clone()));
+    }
+    if let Some(groups) = group_policy
+        .rule_groups
+        .get(&rule.id)
+        .filter(|groups| !groups.is_empty())
+    {
+        object.insert("groups".into(), serde_json::json!(groups));
     }
     if !rule.formats.is_empty() {
         object.insert("formats".into(), serde_json::json!(rule.formats));
@@ -1034,7 +1135,12 @@ fn effective_rule_value(rule: &ct_core::RawRule) -> serde_json::Value {
             );
             object.insert(
                 "rules".into(),
-                serde_json::Value::Array(rule.rules.iter().map(effective_rule_value).collect()),
+                serde_json::Value::Array(
+                    rule.rules
+                        .iter()
+                        .map(|rule| effective_rule_value(rule, group_policy))
+                        .collect(),
+                ),
             );
         }
         _ => {
@@ -1329,6 +1435,77 @@ fn init_config(config_file: Option<PathBuf>) -> Result<()> {
         println!("exists {}", config_path.display());
     }
     println!("wrote {}", schema_path.display());
+    Ok(())
+}
+
+fn run_groups_command(command: GroupsCommand) -> Result<()> {
+    match command {
+        GroupsCommand::List { inputs } => {
+            let cli = load_cli_config(&inputs)?;
+            let used_groups: std::collections::BTreeSet<_> = cli
+                .loaded
+                .group_policy
+                .rule_groups
+                .values()
+                .flat_map(|groups| groups.iter())
+                .cloned()
+                .collect();
+            let mut all_groups = used_groups;
+            all_groups.extend(cli.loaded.group_policy.descriptors.keys().cloned());
+            if all_groups.is_empty() {
+                println!("no groups");
+                return Ok(());
+            }
+            println!("groups:");
+            for id in all_groups {
+                let enabled = cli.group_state.is_enabled(&id);
+                let label = cli.loaded.group_policy.group_label(&id);
+                let status = match cli.loaded.group_policy.descriptors.get(&id) {
+                    Some(descriptor) => match descriptor.status {
+                        GroupStatus::Visible => "visible",
+                        GroupStatus::Hidden => "hidden",
+                        GroupStatus::Ignore => "ignore",
+                    },
+                    None => "default",
+                };
+                println!("  {id} enabled={enabled} status={status} label={label}");
+            }
+            Ok(())
+        }
+        GroupsCommand::Enable { id, inputs } => toggle_group(&inputs, &id, true),
+        GroupsCommand::Disable { id, inputs } => toggle_group(&inputs, &id, false),
+    }
+}
+
+fn toggle_group(inputs: &ConfigInputs, id: &str, enabled: bool) -> Result<()> {
+    let cli = load_cli_config_with_group_state_recovery(inputs, true)?;
+    if cli.loaded.group_policy.is_ignored(id) {
+        bail!("group {id:?} is ignored and cannot be toggled");
+    }
+    let known = cli
+        .loaded
+        .group_policy
+        .rule_groups
+        .values()
+        .any(|groups| groups.contains(id))
+        || cli.loaded.group_policy.descriptors.contains_key(id);
+    if !known {
+        bail!("unknown group {id:?}");
+    }
+    let Some(path) = cli.group_state_path else {
+        bail!("cannot save group state without a state directory or explicit --group-state");
+    };
+    let update = update_group_state(&path, id, enabled, Some(&cli.group_state))?;
+    if let Some(error) = update.recovered_from {
+        eprintln!(
+            "warning: replaced invalid app-owned group state at {} after explicit user change: {error}",
+            path.display()
+        );
+    }
+    println!(
+        "group {id} {}",
+        if enabled { "enabled" } else { "disabled" }
+    );
     Ok(())
 }
 
@@ -1944,14 +2121,13 @@ mod tests {
 
     #[test]
     fn rules_list_defaults_to_every_known_type_and_can_filter_availability() {
-        let all = build_rule_catalog(
-            ConfigInputs {
-                config: Some("rules: []".to_string()),
-                ..ConfigInputs::default()
-            },
-            false,
-        )
-        .unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let inputs = || ConfigInputs {
+            config: Some("rules: []".to_string()),
+            state_dir: Some(dir.path().to_path_buf()),
+            ..ConfigInputs::default()
+        };
+        let all = build_rule_catalog(inputs(), false).unwrap();
         let all_types = all
             .rules
             .iter()
@@ -1978,20 +2154,14 @@ mod tests {
                 .available
         );
 
-        let available = build_rule_catalog(
-            ConfigInputs {
-                config: Some("rules: []".to_string()),
-                ..ConfigInputs::default()
-            },
-            true,
-        )
-        .unwrap();
+        let available = build_rule_catalog(inputs(), true).unwrap();
         assert!(available.rules.iter().all(|rule| rule.available));
         assert_eq!(available.rules.len(), ct_core::REGISTERED_RULE_TYPES.len());
 
         let shell_enabled = build_rule_catalog(
             ConfigInputs {
                 config: Some("config:\n  shell:\n    enabled: true\nrules: []".to_string()),
+                state_dir: Some(dir.path().to_path_buf()),
                 ..ConfigInputs::default()
             },
             true,
@@ -2015,9 +2185,11 @@ mod tests {
             plugin_module("dev.example.demo"),
         )
         .unwrap();
+        let state_dir = dir.path().join("state");
         let inputs = || ConfigInputs {
             config: Some("rules: []".to_string()),
             plugin_dir: Some(dir.path().to_path_buf()),
+            state_dir: Some(state_dir.clone()),
             ..ConfigInputs::default()
         };
 
@@ -2196,8 +2368,10 @@ mod tests {
 
     #[test]
     fn inline_config_loads_for_validation_and_effective_rules() {
+        let dir = tempfile::tempdir().unwrap();
         let inputs = ConfigInputs {
             config: Some("rules: []".to_string()),
+            state_dir: Some(dir.path().to_path_buf()),
             ..ConfigInputs::default()
         };
         let loaded = load_cli_config(&inputs).unwrap();
@@ -2217,9 +2391,14 @@ mod tests {
         fs::write(
             &config_path,
             r#"
+groups:
+  privacy:
+    name: Privacy
+    status: visible
 rules:
   - type: ruleset
     id: clean
+    groups: [privacy]
     rules:
       - type: url
         id: fragment
@@ -2237,7 +2416,13 @@ rules:
         assert_eq!(view["view"], "effective");
         assert_eq!(view["rules"][0]["type"], "ruleset");
         assert_eq!(view["rules"][0]["mode"], "all-matching");
+        assert_eq!(view["rules"][0]["groups"], serde_json::json!(["privacy"]));
         assert_eq!(view["rules"][0]["rules"][0]["type"], "url");
+        assert_eq!(
+            view["rules"][0]["rules"][0]["groups"],
+            serde_json::json!(["privacy"])
+        );
+        assert_eq!(view["groups"]["privacy"]["name"], "Privacy");
         assert_eq!(
             view["rules"][0]["rules"][0]["transform"]["type"],
             "remove-components"
@@ -2248,6 +2433,28 @@ rules:
                 .ends_with("config.yaml")
         );
         assert!(view["rule_sources"]["fragment"]["line"].as_u64().unwrap() > 0);
+    }
+
+    #[test]
+    fn groups_commands_persist_through_the_selected_state_document() {
+        let dir = tempfile::tempdir().unwrap();
+        let state_path = dir.path().join("isolated-groups.json");
+        let inputs = || {
+            ConfigInputs {
+            config: Some(
+                "groups:\n  privacy:\n    status: hidden\nrules:\n  - id: rule\n    groups: [privacy]\n    from: cat\n    to: dog\n"
+                    .to_string(),
+            ),
+            group_state: Some(state_path.clone()),
+            state_dir: Some(dir.path().to_path_buf()),
+            ..ConfigInputs::default()
+        }
+        };
+
+        toggle_group(&inputs(), "privacy", false).unwrap();
+        assert!(!GroupState::load(&state_path).unwrap().is_enabled("privacy"));
+        toggle_group(&inputs(), "privacy", true).unwrap();
+        assert!(GroupState::load(&state_path).unwrap().is_enabled("privacy"));
     }
 
     #[test]
@@ -2305,8 +2512,10 @@ rules:
 
     #[test]
     fn inline_transform_engine_applies_rules_without_system_paths() {
+        let dir = tempfile::tempdir().unwrap();
         let mut pipeline = load_transform_pipeline(&ConfigInputs {
             config: Some("rules:\n  - id: animals\n    from: cat\n    to: dog\n".to_string()),
+            state_dir: Some(dir.path().to_path_buf()),
             ..ConfigInputs::default()
         })
         .unwrap();

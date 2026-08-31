@@ -70,6 +70,9 @@ pub struct RawRule {
     /// How to interpret apps: blacklist skips listed apps; whitelist only allows listed apps.
     #[serde(default)]
     pub app_mode: Option<AppMode>,
+    /// Group IDs this rule belongs to. Inherited from outer rulesets and import entries.
+    #[serde(default)]
+    pub groups: Vec<String>,
     /// Rule-type-specific settings retained for external (plugin) rule types.
     /// Serialized inline so imported plugin rules survive round trips.
     #[serde(flatten, skip_serializing_if = "Option::is_none")]
@@ -235,6 +238,8 @@ struct KnownRawRule {
     apps: Vec<String>,
     #[serde(default)]
     app_mode: Option<AppMode>,
+    #[serde(default)]
+    groups: Vec<String>,
 }
 
 impl From<KnownRawRule> for RawRule {
@@ -257,6 +262,7 @@ impl From<KnownRawRule> for RawRule {
             remove_query_param_patterns: rule.remove_query_param_patterns,
             apps: rule.apps,
             app_mode: rule.app_mode,
+            groups: rule.groups,
             plugin_settings: None,
             validation_error: None,
         }
@@ -278,6 +284,8 @@ struct ExternalRawRule {
     apps: Vec<String>,
     #[serde(default)]
     app_mode: Option<AppMode>,
+    #[serde(default)]
+    groups: Vec<String>,
     #[serde(flatten)]
     settings: serde_json::Map<String, serde_json::Value>,
 }
@@ -291,6 +299,7 @@ impl From<ExternalRawRule> for RawRule {
             formats: rule.formats,
             apps: rule.apps,
             app_mode: rule.app_mode,
+            groups: rule.groups,
             plugin_settings: Some(rule.settings),
             ..Self::default()
         }

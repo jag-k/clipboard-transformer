@@ -1,7 +1,8 @@
 # Rule groups and shared group state
 
-Status: accepted direction for a future configuration and runtime revision; not
-implemented and not part of the current configuration schema or CLI.
+Status: implementation contract for the rule-groups feature. The configuration,
+runtime, CLI, and desktop work is present on the feature branch; this document
+remains the detailed source of truth until release documentation supersedes it.
 
 ## Goals
 
@@ -134,13 +135,15 @@ An absent group entry means enabled. Writers may remove an explicit
 as expiry, change time, or a reason inside each group object; none of those
 features are implied by this plan.
 
-Malformed state is never silently reset. The CLI fails with a human-readable
-error that names the concrete file and suggests fixing it, deleting it to
-reset all groups to enabled, or passing `--ignore-group-state`. The desktop
-keeps its last known-good in-memory state, reports a diagnostic, and leaves
-the file untouched so the user can repair it. Resetting to an empty document
-is not a fallback: absent entries mean enabled, so discarding state would
-silently reactivate rules the user turned off.
+Malformed state is never used for rule evaluation. The CLI fails read-only
+commands with a human-readable error that names the concrete file and suggests
+fixing it, deleting it to reset all groups to enabled, or passing
+`--ignore-group-state`. Explicit writers — `groups enable`/`groups disable` and
+desktop tray toggles — treat the state file as app-owned and rewrite it from the
+last known-good in-memory snapshot, or from an empty state when no snapshot has
+been loaded, logging the parse error. The desktop keeps its last known-good
+in-memory state for runtime; if startup has no valid state, grouped rules remain
+disabled until the file is repaired or an explicit toggle rewrites it.
 
 State must never be supplied by a configuration import. A remote or local rule
 package may describe a group but cannot change whether it is enabled on a

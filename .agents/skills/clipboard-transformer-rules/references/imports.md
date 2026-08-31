@@ -31,3 +31,12 @@ links are treated as ordinary URL imports.
 Remote imports are cached under `<state_dir>/url-imports/`. Validation may
 refresh them and therefore require network access. Do not edit cache files as
 authored source.
+
+Group annotations on repeated edges targeting the same source are merged onto
+the one deduplicated rule copy. `ignore_imported_groups: true` strips all
+membership authored by the imported subtree; a string list strips only those
+ids. Edge groups are added after stripping.
+
+Descriptor-only imports use top-level `group_imports`. Root descriptors win,
+then later metadata imports, then earlier imports. Descriptor sources are part
+of hot-reload tracking and conflicting imported descriptors produce warnings.

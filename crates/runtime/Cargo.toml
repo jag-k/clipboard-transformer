@@ -32,6 +32,7 @@ directories = "5.0"
 dotenvy = "0.15.7"
 extism = "1.30"
 extism-manifest = "1.30"
+fd-lock = "4.0.4"
 glob = "0.3"
 log.workspace = true
 notify = { version = "8.2", optional = true }
