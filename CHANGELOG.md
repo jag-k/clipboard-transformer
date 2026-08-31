@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog], and this project follows
 
 ### Fixed
 
+- **Developer tooling:** Point `just gen-config-schema` at the current
+  `config schema` CLI command.
 - **CI:** Keep tray icon code generation clean under the Rust 1.98 Clippy
   slice-chunking lints.
 - **Release:** Keep `cargo-release` from pushing the release commit and tag

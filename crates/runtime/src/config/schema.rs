@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use anyhow::Result;
-use schemars::{schema::RootSchema, schema_for, JsonSchema};
+use schemars::{generate::SchemaSettings, JsonSchema, Schema};
 use serde::Serialize;
 use serde_json::{json, Value};
 
@@ -290,8 +290,10 @@ struct UnknownRuleSchema {
     kind: String,
 }
 
-pub fn json_schema() -> RootSchema {
-    schema_for!(ConfigDocumentSchema)
+pub fn json_schema() -> Schema {
+    SchemaSettings::draft07()
+        .into_generator()
+        .into_root_schema_for::<ConfigDocumentSchema>()
 }
 
 pub fn json_schema_pretty() -> Result<String> {
@@ -334,10 +336,44 @@ pub fn plugin_schema_contributions(
 /// The effective runtime schema: built-in variants plus one variant per
 /// discovered plugin rule type.
 pub fn json_schema_pretty_with_plugins(plugins: &[PluginRuleSchemaContribution]) -> Result<String> {
-    let mut schema = serde_json::to_value(json_schema())?;
+    let mut schema = json_schema().to_value();
+    normalize_draft07_schema(&mut schema);
     enrich_config_schema(&mut schema);
     add_plugin_rule_variants(&mut schema, plugins);
     Ok(serde_json::to_string_pretty(&schema)?)
+}
+
+fn normalize_draft07_schema(value: &mut Value) {
+    match value {
+        Value::Array(values) => {
+            for value in values {
+                normalize_draft07_schema(value);
+            }
+        }
+        Value::Object(object) => {
+            for value in object.values_mut() {
+                normalize_draft07_schema(value);
+            }
+
+            if let Some(Value::String(constant)) = object.remove("const") {
+                object.insert("enum".to_string(), json!([constant]));
+            }
+            if let Some(Value::String(description)) = object.get_mut("description") {
+                *description = description
+                    .split("\n\n")
+                    .map(|paragraph| paragraph.split_whitespace().collect::<Vec<_>>().join(" "))
+                    .collect::<Vec<_>>()
+                    .join("\n\n");
+            }
+            if let Some(Value::Array(required)) = object.get_mut("required") {
+                required.sort_by(|left, right| left.as_str().cmp(&right.as_str()));
+            }
+            if object.get("minimum").and_then(Value::as_u64) == Some(0) {
+                object.insert("minimum".to_string(), json!(0.0));
+            }
+        }
+        _ => {}
+    }
 }
 
 fn enrich_config_schema(schema: &mut Value) {
