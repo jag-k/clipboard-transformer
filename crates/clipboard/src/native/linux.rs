@@ -654,8 +654,10 @@ impl X11ClipboardBackend {
         }
         Ok(data
             .bytes
-            .chunks_exact(4)
-            .map(|chunk| u32::from_ne_bytes(chunk.try_into().expect("four-byte atom")))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|chunk| u32::from_ne_bytes(*chunk))
             .collect())
     }
 
@@ -1009,8 +1011,10 @@ fn change_property_bytes(
         )?,
         16 if bytes.len().is_multiple_of(2) => {
             let values = bytes
-                .chunks_exact(2)
-                .map(|chunk| u16::from_ne_bytes([chunk[0], chunk[1]]))
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|chunk| u16::from_ne_bytes(*chunk))
                 .collect::<Vec<_>>();
             connection.change_property16(
                 PropMode::REPLACE,
@@ -1022,8 +1026,10 @@ fn change_property_bytes(
         }
         32 if bytes.len().is_multiple_of(4) => {
             let values = bytes
-                .chunks_exact(4)
-                .map(|chunk| u32::from_ne_bytes(chunk.try_into().expect("four bytes")))
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|chunk| u32::from_ne_bytes(*chunk))
                 .collect::<Vec<_>>();
             connection.change_property32(
                 PropMode::REPLACE,

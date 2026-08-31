@@ -399,7 +399,7 @@ fn create_icon(dark_theme: bool) -> Result<HICON> {
         .rgba8()
         .context("Windows tray icon must use RGBA8 pixels")?
         .to_vec();
-    for pixel in bgra.chunks_exact_mut(4) {
+    for pixel in bgra.as_chunks_mut::<4>().0 {
         pixel.swap(0, 2);
         let alpha = u16::from(pixel[3]);
         for channel in &mut pixel[..3] {

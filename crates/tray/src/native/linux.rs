@@ -45,7 +45,7 @@ impl ksni::Tray for LinuxTrayState {
             .rgba8()
             .expect("Linux tray fallback icon uses RGBA8 pixels")
             .to_vec();
-        for pixel in argb.chunks_exact_mut(4) {
+        for pixel in argb.as_chunks_mut::<4>().0 {
             pixel.rotate_right(1);
         }
         vec![ksni::Icon {
