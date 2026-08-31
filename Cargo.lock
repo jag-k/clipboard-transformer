@@ -972,7 +972,7 @@ dependencies = [
  "sha2",
  "shlex",
  "tempfile",
- "thiserror 1.0.69",
+ "thiserror 2.0.19",
  "toml 1.1.4+spec-1.1.0",
  "ureq",
  "url",
