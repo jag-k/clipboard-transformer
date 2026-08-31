@@ -26,6 +26,12 @@ ignore = [
   # and its fixes start at 46.0.2, so no compatible Cargo update exists yet.
   # Keep this as a warning until Extism publishes a compatible Wasmtime upgrade.
   { id = "RUSTSEC-2026-0222", reason = "low-severity Wasmtime advisory in transitive Extism runtime; no patched Extism-compatible version is available" },
+  # RUSTSEC-2026-0269 is a filesystem sandbox escape for WASI guests that are
+  # granted preopened directories. Clipboard Transformer does not put allowed
+  # paths in the Extism manifest, so plugins receive no filesystem directories
+  # to escape from. Extism 1.30 still pins Wasmtime 43.x; remove this exception
+  # as soon as Extism supports a patched Wasmtime release (46.0.3 or newer).
+  { id = "RUSTSEC-2026-0269", reason = "Wasmtime filesystem sandbox escape is unreachable because plugins receive no preopened directories; Extism 1.30 has no compatible patched Wasmtime" },
   # wasm-compose is reached only through Wasmtime in the Extism plugin runtime.
   # Its persistent data structures use three crates that were archived together.
   # These advisories are informational and none of the crates has a patched
