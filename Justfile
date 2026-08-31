@@ -206,7 +206,7 @@ gen-icons *args:
 [doc('Write the config JSON Schema under target/generated/')]
 [group('gen')]
 gen-config-schema:
-    cargo run --locked --bin {{ bin }} -- schema --output {{ quote(schema_file) }}
+    cargo run --locked --bin {{ bin }} -- config schema --output {{ quote(schema_file) }}
 
 [doc('Generate the ignored Flatpak Cargo source list from Cargo.lock')]
 [group('gen')]

@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{bail, Result};
 
 mod icons;
+mod schema_compat;
 mod schemas;
 mod xtp_schema;
 

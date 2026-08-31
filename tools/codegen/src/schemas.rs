@@ -2,10 +2,12 @@
 
 use anyhow::{Context, Result};
 use ct_plugin_api::PluginManifest;
-use schemars::schema_for;
+use schemars::generate::SchemaSettings;
 use serde_json::{json, Value};
 
-use crate::{workspace_root, write_if_changed, xtp_schema};
+use crate::{
+    schema_compat::normalize_draft07_schema, workspace_root, write_if_changed, xtp_schema,
+};
 
 const MANIFEST_SCHEMA_PATH: &str = "plugins/manifest.schema.json";
 const PLUGIN_API_SCHEMA_PATH: &str = "plugins/plugin-api-v1.xtp.yaml";
@@ -26,7 +28,11 @@ pub fn generate() -> Result<()> {
 }
 
 fn manifest_json_schema() -> Result<String> {
-    let mut schema = serde_json::to_value(schema_for!(PluginManifest))?;
+    let mut schema = SchemaSettings::draft07()
+        .into_generator()
+        .into_root_schema_for::<PluginManifest>()
+        .to_value();
+    normalize_draft07_schema(&mut schema);
     let root = schema
         .as_object_mut()
         .context("manifest schema root must be an object")?;
