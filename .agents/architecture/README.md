@@ -48,6 +48,8 @@ the application.
 The current author contract is [`plugins/API.md`](../../plugins/API.md).
 Potential host-managed authentication is summarized in
 [`../plans/plugin-authentication.md`](../plans/plugin-authentication.md).
+The accepted future direction for rule-group metadata and shared local group
+state is recorded in [`../plans/rule-groups.md`](../plans/rule-groups.md).
 
 ## Platforms
 
