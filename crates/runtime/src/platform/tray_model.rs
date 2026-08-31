@@ -163,6 +163,35 @@ pub fn build_menu_model(snapshot: &TraySnapshot) -> TrayMenu {
         items.push(TrayMenuItem::Separator);
     }
 
+    if !snapshot.groups.is_empty() {
+        items.push(entry(TrayMenuEntry::informational(
+            "groups-header",
+            "Groups",
+        )));
+        for group in &snapshot.groups {
+            let mut toggle = TrayMenuEntry::action(
+                format!("group:{}", group.id),
+                group.label.as_str(),
+                TrayAction::SetGroupEnabled {
+                    group_id: group.id.clone(),
+                    enabled: !group.enabled,
+                },
+                None,
+            );
+            toggle.checked = Some(group.enabled);
+            items.push(entry(toggle));
+        }
+        if snapshot.group_overflow > 0 {
+            items.push(entry(TrayMenuEntry::action(
+                "groups-overflow",
+                format!("{} more group(s) — Open config", snapshot.group_overflow),
+                TrayAction::OpenConfig,
+                None,
+            )));
+        }
+        items.push(TrayMenuItem::Separator);
+    }
+
     let mut pause = TrayMenuEntry::action(
         "pause",
         "Pause Transformations",
@@ -324,6 +353,9 @@ mod tests {
             disable_for: 60,
             autostart: AutostartStatus::Disabled,
             paused: false,
+            groups: Vec::new(),
+            group_overflow: 0,
+            group_state_error: None,
         }
     }
 
@@ -335,6 +367,25 @@ mod tests {
                 _ => None,
             })
             .unwrap_or_else(|| panic!("missing tray menu entry {id}"))
+    }
+
+    #[test]
+    fn group_overflow_is_visible_and_opens_the_config() {
+        let mut snapshot = snapshot();
+        snapshot.groups.push(crate::platform::tray::TrayGroup {
+            id: "privacy".into(),
+            label: "Privacy".into(),
+            enabled: true,
+        });
+        snapshot.group_overflow = 3;
+
+        let menu = build_menu_model(&snapshot);
+        let overflow = find_entry(&menu.items, "groups-overflow");
+        assert!(overflow
+            .label
+            .title_for(TrayPlatform::current())
+            .contains("3 more"));
+        assert_eq!(overflow.command, Some(TrayAction::OpenConfig));
     }
 
     #[test]

@@ -170,6 +170,89 @@ macro_rules! persistent_json {
 
 persistent_json!(PersistentAppState);
 
+fn enabled() -> bool {
+    true
+}
+
+fn is_enabled(value: &bool) -> bool {
+    *value
+}
+
+/// One entry in the group state document. Missing means the group is enabled.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct GroupStateEntry {
+    #[serde(default = "enabled", skip_serializing_if = "is_enabled")]
+    pub enabled: bool,
+}
+
+/// Persistent enable/disable state for rule groups.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct GroupState {
+    pub version: u32,
+    pub groups: BTreeMap<String, GroupStateEntry>,
+}
+
+impl GroupState {
+    pub const VERSION: u32 = 1;
+    pub const FILE_NAME: &str = "groups.json";
+
+    pub fn load(path: &Path) -> Result<Self> {
+        match fs::read(path) {
+            Ok(bytes) => {
+                let value: Self = serde_json::from_slice(&bytes)
+                    .with_context(|| format!("parse {}", path.display()))?;
+                if value.version != Self::VERSION {
+                    anyhow::bail!(
+                        "unsupported group state version {} in {}",
+                        value.version,
+                        path.display()
+                    );
+                }
+                Ok(value)
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Self {
+                version: Self::VERSION,
+                ..Self::default()
+            }),
+            Err(error) => Err(error).with_context(|| format!("read {}", path.display())),
+        }
+    }
+
+    pub fn save(&self, path: &Path) -> Result<()> {
+        save_compact_json(path, self)
+    }
+
+    pub fn is_enabled(&self, group_id: &str) -> bool {
+        self.groups
+            .get(group_id)
+            .map(|entry| entry.enabled)
+            .unwrap_or(true)
+    }
+
+    pub fn set_enabled(&mut self, group_id: &str, enabled: bool) {
+        if enabled {
+            if let Some(entry) = self.groups.get_mut(group_id) {
+                if entry.enabled {
+                    return;
+                }
+                entry.enabled = true;
+            }
+            // No entry means enabled; no need to create one.
+        } else {
+            self.groups
+                .insert(group_id.to_string(), GroupStateEntry { enabled: false });
+        }
+    }
+
+    pub fn list(&self) -> impl Iterator<Item = (&str, bool)> {
+        self.groups
+            .iter()
+            .map(|(id, entry)| (id.as_str(), entry.enabled))
+    }
+}
+
 impl PersistentHistory {
     pub const VERSION: u32 = 1;
 

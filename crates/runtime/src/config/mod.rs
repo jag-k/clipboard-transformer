@@ -25,10 +25,12 @@ pub use schema::{
     PluginRuleSchemaContribution,
 };
 
+use crate::groups::GroupPolicy;
 use ct_core::{is_registered_rule_type, AppMode, RawRule, RuleEngine};
 
 pub use ct_config::{
-    AppConfig, ConfigDocument, ConfigFormat, EditorConfig, NotificationConfig, ShellConfig,
+    AppConfig, ConfigDocument, ConfigFormat, EditorConfig, GroupDescriptor, GroupImport,
+    GroupStatus, IgnoreImportedGroups, NotificationConfig, ShellConfig,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -44,6 +46,7 @@ pub struct LoadedConfig {
     pub remote_imports: BTreeMap<String, PathBuf>,
     pub rule_sources: BTreeMap<String, RuleSource>,
     pub warnings: Vec<ConfigWarning>,
+    pub group_policy: GroupPolicy,
 }
 
 type ShellSourcePolicy<'a> = (
@@ -121,6 +124,18 @@ pub enum ConfigWarning {
         kind: String,
         reason: String,
     },
+    GroupIssue {
+        issue: crate::groups::GroupValidationIssue,
+    },
+    GroupImportConflict {
+        id: String,
+        previous_source: PathBuf,
+        overriding_source: PathBuf,
+    },
+    IgnoredImportGroupMissing {
+        id: String,
+        source: PathBuf,
+    },
 }
 
 impl fmt::Display for ConfigWarning {
@@ -155,6 +170,22 @@ impl fmt::Display for ConfigWarning {
                     write!(formatter, "{kind} rule without an id ignored: {reason}")
                 }
             }
+            Self::GroupIssue { issue } => write!(formatter, "group issue: {issue}"),
+            Self::GroupImportConflict {
+                id,
+                previous_source,
+                overriding_source,
+            } => write!(
+                formatter,
+                "group descriptor {id:?} from {} overrides the descriptor from {}",
+                overriding_source.display(),
+                previous_source.display()
+            ),
+            Self::IgnoredImportGroupMissing { id, source } => write!(
+                formatter,
+                "import {} ignores group {id:?}, but that group is not used by the imported subtree",
+                source.display()
+            ),
         }
     }
 }
@@ -235,6 +266,7 @@ pub fn collect_config_sources_best_effort_with_options(
             let mut sources = BTreeSet::new();
             let mut context = LoadContext::new(options);
             collect_yaml_sources(path, &mut stack, &mut sources, &mut context);
+            collect_group_import_sources_best_effort(path, &mut sources, &mut context);
             sources
         }
         Ok(ConfigFormat::Toml) => {
@@ -242,6 +274,7 @@ pub fn collect_config_sources_best_effort_with_options(
             let mut sources = BTreeSet::new();
             let mut context = LoadContext::new(options);
             collect_toml_sources(path, &mut stack, &mut sources, &mut context);
+            collect_group_import_sources_best_effort(path, &mut sources, &mut context);
             sources
         }
         Err(_) => [path.to_path_buf()].into_iter().collect(),
@@ -309,12 +342,18 @@ fn finish_loaded_config(
             &mut warnings,
         );
     }
+    let group_policy = GroupPolicy::from_document(&document);
+    for issue in group_policy.validate().unwrap_or_default() {
+        push_warning(&mut warnings, ConfigWarning::GroupIssue { issue });
+    }
+
     LoadedConfig {
         document,
         sources,
         remote_imports,
         rule_sources,
         warnings,
+        group_policy,
     }
 }
 
@@ -572,9 +611,12 @@ fn load_yaml(path: &Path, options: &ConfigLoadOptions) -> Result<LoadedConfig> {
     let mut stack = VecDeque::new();
     let mut sources = BTreeSet::new();
     let mut context = LoadContext::new(options.clone());
+    collect_yaml_sources(path, &mut stack, &mut sources, &mut context);
+    stack.clear();
     let value = load_yaml_value(path, &mut stack, &mut sources, &mut context)?;
-    let document = serde_yaml::from_value(value)
+    let mut document = serde_yaml::from_value(value)
         .with_context(|| format!("invalid YAML config {}", path.display()))?;
+    expand_group_imports(path, &mut document, &mut context, &mut sources)?;
     let root = normalize_path(path)?;
     let remote_sources = context.remote_sources.clone();
     let authorized_remote_shell_rules = context.authorized_remote_shell_rules.clone();
@@ -592,6 +634,8 @@ struct LoadContext {
     options: ConfigLoadOptions,
     import_refresh_interval: Duration,
     loaded: BTreeSet<PathBuf>,
+    rule_import_group_overlays: BTreeMap<PathBuf, ImportGroupOverlay>,
+    group_import_stack: Vec<PathBuf>,
     warnings: Vec<ConfigWarning>,
     remote_sources: BTreeSet<PathBuf>,
     remote_imports: BTreeMap<String, PathBuf>,
@@ -607,6 +651,8 @@ impl LoadContext {
                 AppConfig::default().import_refresh_interval,
             ),
             loaded: BTreeSet::new(),
+            rule_import_group_overlays: BTreeMap::new(),
+            group_import_stack: Vec::new(),
             warnings: Vec::new(),
             remote_sources: BTreeSet::new(),
             remote_imports: BTreeMap::new(),
@@ -620,6 +666,147 @@ impl LoadContext {
             self.warnings.push(warning);
         }
     }
+}
+
+#[derive(Debug, Clone, Default)]
+struct ImportGroupOverlay {
+    add: BTreeSet<String>,
+    strip: BTreeSet<String>,
+    strip_all: bool,
+}
+
+impl ImportGroupOverlay {
+    fn merge(&mut self, import: &ImportDirective) {
+        self.add.extend(import.groups.iter().cloned());
+        match &import.ignore_imported_groups {
+            Some(IgnoreImportedGroups::All(true)) => self.strip_all = true,
+            Some(IgnoreImportedGroups::List(ids)) => self.strip.extend(ids.iter().cloned()),
+            Some(IgnoreImportedGroups::All(false)) | None => {}
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.add.is_empty() && self.strip.is_empty() && !self.strip_all
+    }
+}
+
+fn expand_group_imports(
+    path: &Path,
+    document: &mut ConfigDocument,
+    context: &mut LoadContext,
+    sources: &mut BTreeSet<PathBuf>,
+) -> Result<BTreeMap<String, PathBuf>> {
+    let path = normalize_path(path)?;
+    if let Some(cycle_start) = context
+        .group_import_stack
+        .iter()
+        .position(|source| source == &path)
+    {
+        let mut chain = context.group_import_stack[cycle_start..].to_vec();
+        chain.push(path);
+        context.warn(ConfigWarning::ImportCycle { chain });
+        return Ok(BTreeMap::new());
+    }
+    context.group_import_stack.push(path.clone());
+
+    let base_dir = path.parent().unwrap_or(Path::new("."));
+    let root_group_ids = document.groups.keys().cloned().collect::<BTreeSet<_>>();
+    let mut provenance = root_group_ids
+        .iter()
+        .map(|id| (id.clone(), path.clone()))
+        .collect::<BTreeMap<_, _>>();
+    let mut imported_groups = BTreeMap::new();
+    let mut imported_provenance = BTreeMap::<String, PathBuf>::new();
+    let imports = std::mem::take(&mut document.group_imports);
+    for import in imports {
+        let resolved = resolve_import_path(base_dir, &import.source, context)?;
+        sources.insert(resolved.clone());
+        if let Some(cycle_start) = context
+            .group_import_stack
+            .iter()
+            .position(|source| source == &resolved)
+        {
+            let mut chain = context.group_import_stack[cycle_start..].to_vec();
+            chain.push(resolved);
+            context.warn(ConfigWarning::ImportCycle { chain });
+            continue;
+        }
+        let mut imported = load_raw_document(&resolved)?;
+        let child_provenance = expand_group_imports(&resolved, &mut imported, context, sources)?;
+        for (id, mut descriptor) in imported.groups {
+            descriptor.status = import.status.unwrap_or(GroupStatus::Hidden);
+            let descriptor_source = child_provenance
+                .get(&id)
+                .cloned()
+                .unwrap_or_else(|| resolved.clone());
+            if imported_groups.get(&id) != Some(&descriptor) {
+                if let Some(previous_source) = imported_provenance.get(&id) {
+                    context.warn(ConfigWarning::GroupImportConflict {
+                        id: id.clone(),
+                        previous_source: previous_source.clone(),
+                        overriding_source: descriptor_source.clone(),
+                    });
+                }
+            }
+            imported_groups.insert(id.clone(), descriptor);
+            imported_provenance.insert(id, descriptor_source);
+        }
+    }
+    for (id, descriptor) in imported_groups {
+        if root_group_ids.contains(&id) {
+            continue;
+        }
+        document.groups.insert(id.clone(), descriptor);
+        if let Some(source) = imported_provenance.remove(&id) {
+            provenance.insert(id, source);
+        }
+    }
+    context.group_import_stack.pop();
+    Ok(provenance)
+}
+
+fn load_raw_document(path: &Path) -> Result<ConfigDocument> {
+    let text = fs::read_to_string(path)
+        .with_context(|| format!("read group import {}", path.display()))?;
+    match imported_config_format(path)? {
+        ConfigFormat::Yaml => serde_yaml::from_str(&text)
+            .with_context(|| format!("parse group import YAML {}", path.display())),
+        ConfigFormat::Toml => toml::from_str(&text)
+            .with_context(|| format!("parse group import TOML {}", path.display())),
+    }
+}
+
+fn collect_group_import_sources_best_effort(
+    path: &Path,
+    sources: &mut BTreeSet<PathBuf>,
+    context: &mut LoadContext,
+) {
+    fn collect(
+        path: &Path,
+        sources: &mut BTreeSet<PathBuf>,
+        context: &mut LoadContext,
+        visited: &mut BTreeSet<PathBuf>,
+    ) {
+        let Ok(path) = normalize_path(path) else {
+            return;
+        };
+        if !visited.insert(path.clone()) {
+            return;
+        }
+        let Ok(document) = load_raw_document(&path) else {
+            return;
+        };
+        let base_dir = path.parent().unwrap_or(Path::new("."));
+        for import in document.group_imports {
+            let Ok(resolved) = resolve_import_path(base_dir, &import.source, context) else {
+                continue;
+            };
+            sources.insert(resolved.clone());
+            collect(&resolved, sources, context, visited);
+        }
+    }
+
+    collect(path, sources, context, &mut BTreeSet::new());
 }
 
 fn load_yaml_value(
@@ -712,6 +899,11 @@ fn collect_yaml_import_sources(
         YamlValue::Mapping(mapping) => {
             if let Some(import) = mapping_import_directive(mapping) {
                 if let Ok(path) = resolve_import_path(base_dir, &import.source, context) {
+                    context
+                        .rule_import_group_overlays
+                        .entry(path.clone())
+                        .or_default()
+                        .merge(&import);
                     collect_yaml_sources(&path, stack, sources, context);
                 }
                 return;
@@ -776,8 +968,11 @@ fn expand_mapping(
     }
     if let Some(import) = mapping_import_directive(&mapping) {
         let path = resolve_import_path(base_dir, &import.source, context)?;
-        let rules = load_imported_rules_by_format(&path, stack, sources, context)?;
+        let mut rules = load_imported_rules_by_format(&path, stack, sources, context)?;
         authorize_imported_shell_rules(&import, &path, &rules, context)?;
+        if let Some(overlay) = context.rule_import_group_overlays.get(&path).cloned() {
+            apply_import_group_overlay(&mut rules, &path, &overlay, &mut context.warnings);
+        }
         return serde_yaml::to_value(rules).context("serialize imported rules");
     }
     if mapping_has_legacy_include(&mapping) {
@@ -852,6 +1047,10 @@ struct ExpandedImport {
     permissions: ImportPermissions,
     #[serde(default)]
     sha256: Option<String>,
+    #[serde(default)]
+    groups: Vec<String>,
+    #[serde(default)]
+    ignore_imported_groups: Option<IgnoreImportedGroups>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -865,6 +1064,8 @@ struct ImportDirective {
     source: String,
     shell: bool,
     sha256: Option<String>,
+    groups: Vec<String>,
+    ignore_imported_groups: Option<IgnoreImportedGroups>,
 }
 
 fn mapping_import_directive(mapping: &Mapping) -> Option<ImportDirective> {
@@ -880,11 +1081,15 @@ fn mapping_import_directive(mapping: &Mapping) -> Option<ImportDirective> {
             source,
             shell: false,
             sha256: None,
+            groups: Vec::new(),
+            ignore_imported_groups: None,
         },
         ImportValue::Expanded(import) => ImportDirective {
             source: import.source,
             shell: import.permissions.shell,
             sha256: import.sha256,
+            groups: import.groups,
+            ignore_imported_groups: import.ignore_imported_groups,
         },
     })
 }
@@ -935,6 +1140,51 @@ fn authorize_imported_shell_rules(
             .insert((path.to_path_buf(), id.to_string()));
     });
     Ok(())
+}
+
+fn apply_import_group_overlay(
+    rules: &mut [RawRule],
+    source: &Path,
+    overlay: &ImportGroupOverlay,
+    warnings: &mut Vec<ConfigWarning>,
+) {
+    if overlay.is_empty() || rules.is_empty() {
+        return;
+    }
+    let imported_groups = collect_authored_group_ids(rules);
+    for id in overlay.strip.difference(&imported_groups) {
+        push_warning(
+            warnings,
+            ConfigWarning::IgnoredImportGroupMissing {
+                id: id.clone(),
+                source: source.to_path_buf(),
+            },
+        );
+    }
+    apply_import_group_overlay_to_rules(rules, overlay);
+}
+
+fn apply_import_group_overlay_to_rules(rules: &mut [RawRule], overlay: &ImportGroupOverlay) {
+    for rule in rules {
+        if overlay.strip_all {
+            rule.groups.clear();
+        } else {
+            rule.groups.retain(|id| !overlay.strip.contains(id));
+        }
+        rule.groups.extend(overlay.add.iter().cloned());
+        rule.groups.sort();
+        rule.groups.dedup();
+        apply_import_group_overlay_to_rules(&mut rule.rules, overlay);
+    }
+}
+
+fn collect_authored_group_ids(rules: &[RawRule]) -> BTreeSet<String> {
+    let mut groups = BTreeSet::new();
+    for rule in rules {
+        groups.extend(rule.groups.iter().cloned());
+        groups.extend(collect_authored_group_ids(&rule.rules));
+    }
+    groups
 }
 
 fn collect_shell_rule_ids(rules: &[RawRule], found: &mut impl FnMut(&str)) {
@@ -1330,7 +1580,10 @@ fn load_toml(path: &Path, options: &ConfigLoadOptions) -> Result<LoadedConfig> {
     let mut stack = VecDeque::new();
     let mut sources = BTreeSet::new();
     let mut context = LoadContext::new(options.clone());
-    let document = load_toml_document(path, &mut stack, &mut sources, &mut context)?;
+    collect_toml_sources(path, &mut stack, &mut sources, &mut context);
+    stack.clear();
+    let mut document = load_toml_document(path, &mut stack, &mut sources, &mut context)?;
+    expand_group_imports(path, &mut document, &mut context, &mut sources)?;
     let root = normalize_path(path)?;
     let remote_sources = context.remote_sources.clone();
     let authorized_remote_shell_rules = context.authorized_remote_shell_rules.clone();
@@ -1417,10 +1670,17 @@ fn toml_document_from_value(
         BTreeMap::new()
     };
     let rules = expand_toml_rules(&value, base_dir, stack, sources, context)?;
+    let (groups, group_imports) = if stack.len() == 1 {
+        parse_toml_groups(&value)?
+    } else {
+        (BTreeMap::new(), Vec::new())
+    };
     Ok(ConfigDocument {
         config,
         rules,
         plugins,
+        groups,
+        group_imports,
     })
 }
 
@@ -1472,6 +1732,11 @@ fn collect_toml_import_sources(
     for rule in rules {
         if let Some(import) = toml_import_directive(rule) {
             if let Ok(path) = resolve_import_path(base_dir, &import.source, context) {
+                context
+                    .rule_import_group_overlays
+                    .entry(path.clone())
+                    .or_default()
+                    .merge(&import);
                 collect_import_sources_by_format(&path, stack, sources, context);
             }
         }
@@ -1508,8 +1773,11 @@ fn expand_toml_rules(
     for rule in rules {
         if let Some(import) = toml_import_directive(rule) {
             let path = resolve_import_path(base_dir, &import.source, context)?;
-            let imported = load_imported_rules_by_format(&path, stack, sources, context)?;
+            let mut imported = load_imported_rules_by_format(&path, stack, sources, context)?;
             authorize_imported_shell_rules(&import, &path, &imported, context)?;
+            if let Some(overlay) = context.rule_import_group_overlays.get(&path).cloned() {
+                apply_import_group_overlay(&mut imported, &path, &overlay, &mut context.warnings);
+            }
             expanded.extend(imported);
         } else if toml_has_legacy_include(rule) {
             bail!("TOML `include` is unsupported; use `import = \"path-or-url\"` inside rules instead");
@@ -1548,6 +1816,8 @@ fn toml_import_directive(value: &toml::Value) -> Option<ImportDirective> {
             source: source.to_string(),
             shell: false,
             sha256: None,
+            groups: Vec::new(),
+            ignore_imported_groups: None,
         });
     }
     let expanded: ExpandedImport = import.clone().try_into().ok()?;
@@ -1555,6 +1825,8 @@ fn toml_import_directive(value: &toml::Value) -> Option<ImportDirective> {
         source: expanded.source,
         shell: expanded.permissions.shell,
         sha256: expanded.sha256,
+        groups: expanded.groups,
+        ignore_imported_groups: expanded.ignore_imported_groups,
     })
 }
 
@@ -1562,6 +1834,26 @@ fn toml_has_legacy_include(value: &toml::Value) -> bool {
     value
         .as_table()
         .is_some_and(|table| table.len() == 1 && table.contains_key("include"))
+}
+
+fn parse_toml_groups(
+    value: &toml::Value,
+) -> Result<(BTreeMap<String, GroupDescriptor>, Vec<GroupImport>)> {
+    let groups = value
+        .get("groups")
+        .cloned()
+        .map(toml::Value::try_into)
+        .transpose()
+        .context("invalid TOML groups section")?
+        .unwrap_or_default();
+    let group_imports = value
+        .get("group_imports")
+        .cloned()
+        .map(toml::Value::try_into)
+        .transpose()
+        .context("invalid TOML group_imports section")?
+        .unwrap_or_default();
+    Ok((groups, group_imports))
 }
 
 fn extract_toml_import_refresh_interval(value: &toml::Value) -> Duration {

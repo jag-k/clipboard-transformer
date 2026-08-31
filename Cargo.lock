@@ -958,6 +958,7 @@ dependencies = [
  "dotenvy",
  "extism",
  "extism-manifest",
+ "fd-lock",
  "futures-lite",
  "futures-util",
  "glob",

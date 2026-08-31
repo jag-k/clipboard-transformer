@@ -465,12 +465,14 @@ impl ConfigReloader {
             .config
             .app_matcher()
             .context("compile reloaded config app filter")?;
+        let source_fingerprint = source_contents_fingerprint(&loaded.sources, &self.dotenv_path)?;
         if document_fingerprint == self.last_document_fingerprint
             && loaded.sources == self.watched_sources
             && load_metadata_fingerprint == self.last_load_metadata_fingerprint
             && plugin_modules == self.last_plugin_modules
             && !environment_changed
         {
+            self.last_source_contents_fingerprint = source_fingerprint;
             logging::event("config reload checked; no changes found");
             return Ok(ReloadOutcome::Unchanged);
         }
@@ -525,8 +527,7 @@ impl ConfigReloader {
         self.remote_imports = loaded.remote_imports.clone();
         self.import_refresh_interval = loaded.document.config.import_refresh_interval;
         self.last_document_fingerprint = document_fingerprint;
-        self.last_source_contents_fingerprint =
-            source_contents_fingerprint(&loaded.sources, &self.dotenv_path)?;
+        self.last_source_contents_fingerprint = source_fingerprint;
         self.last_load_metadata_fingerprint = load_metadata_fingerprint;
         self.last_plugin_modules = plugin_modules;
         self.last_environment_revision = environment_revision;
@@ -1018,7 +1019,9 @@ mod tests {
                 .as_deref()
                 .and_then(Path::parent)
                 .unwrap();
-            reloader.watcher.unwatch(directory).unwrap();
+            if !reloader.watched_dirs.contains(directory) {
+                reloader.watcher.unwatch(directory).unwrap();
+            }
         }
         while reloader.events.try_recv().is_ok() {}
         reloader.last_url_check = Instant::now() - Duration::from_secs(2);

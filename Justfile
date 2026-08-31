@@ -43,7 +43,7 @@ linux_icon_dir := "assets/generated/linux"
 linux_packager_config := "package/linux/Packager.toml"
 flatpak_manifest := "package/flatpak/dev.jag_k.clipboard_transformer.json"
 flatpak_app_id := "dev.jag_k.clipboard_transformer"
-macos_packager_config := if env_var_or_default("APPLE_SIGNING_IDENTITY", "") == "" { "Packager.toml" } else { "Packager.local.toml" }
+macos_packager_config := if env("APPLE_SIGNING_IDENTITY", "") == "" { "Packager.toml" } else { "Packager.local.toml" }
 bin := "clipboard-transformer"
 app_bin := "clipboard-transformer-app"
 release_app_bin := "target/release/" + app_bin

@@ -14,7 +14,7 @@ Load only the references needed for the task:
 - Read `references/paths.md` when locating config, state, cache, schema, or
   plugin paths.
 - Read `references/rules.md` before authoring shared fields, built-in text/URL
-  rules, or rulesets.
+  rules, rulesets, or group descriptors.
 - Read `references/shell-rules.md` before adding or changing `shell` or
   `item-shell` rules.
 - Read `references/imports.md` when inspecting, adding, or changing imports.
@@ -47,6 +47,8 @@ Load only the references needed for the task:
      make a proposed rule pass.
 
 3. Select the narrowest rule shape.
+   - Use groups for compact enablement of related rules across the desktop app,
+     CLI, and future SDKs.
    - Use `url-cleanup` for simple HTTP(S) query-parameter removal.
    - Use `url` for one structural URL operation.
    - Use `regexp` for UTF-8 text rewrites and capture replacements.
@@ -118,8 +120,8 @@ Load only the references needed for the task:
 ## References
 
 - `references/paths.md`: config discovery and platform/XDG path resolution.
-- `references/rules.md`: shared fields and built-in regexp, URL, cleanup, and
-  ruleset semantics.
+- `references/rules.md`: shared fields and built-in regexp, URL, cleanup,
+  ruleset, and group semantics.
 - `references/shell-rules.md`: executable rule behavior and trust boundaries.
 - `references/imports.md`: local/remote import resolution, caching, and pins.
 - `references/plugins.md`: plugin rule discovery and lifecycle commands.

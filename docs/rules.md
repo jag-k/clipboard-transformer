@@ -24,6 +24,9 @@ Installed WASM plugins add namespaced types such as
 - `name` is the optional human-readable notification label.
 - `formats` chooses eligible clipboard representations.
 - `apps` plus `app_mode` restricts rules to source applications.
+- `groups` adds the rule to one or more enablement groups; inherited from
+  outer rulesets and import edges. A rule is active only when every group in
+  its effective membership is enabled.
 - A successful text transform authors portable plain text, removes stale
   text/URL/HTML/RTF views, and keeps unrelated native data.
 - A non-match leaves the clipboard item untouched.

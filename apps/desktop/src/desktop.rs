@@ -275,6 +275,23 @@ pub fn run() -> Result<()> {
         config_warnings,
         (plugin_statuses, plugin_fingerprint),
     )?;
+    let group_state_commands = command_sender.clone();
+    let group_state_wake = wake.clone();
+    let _group_state_watcher = ct_runtime::groups::GroupStateWatcher::new(
+        paths
+            .state_dir
+            .join(ct_runtime::state::GroupState::FILE_NAME),
+        std::sync::Arc::new(move || {
+            if group_state_commands
+                .send(AppCommand::ReloadGroupState)
+                .is_ok()
+            {
+                group_state_wake.wake_for(WAKE_COMMANDS);
+            } else {
+                logging::event("group state change dropped: command channel closed");
+            }
+        }),
+    )?;
     agent.deliver_startup_notification(&config_path, rule_count)?;
     agent.deliver_plugin_attention_notification();
 
@@ -310,6 +327,11 @@ where
     agent.set_tray_config_warnings(config_warnings);
     agent.set_plugin_statuses(plugin_state.0, plugin_state.1);
     agent.set_autostart_status(platform::autostart::status());
+    if let Err(error) = agent.load_group_state(&paths.state_dir) {
+        ct_runtime::logging::event(format!(
+            "group state load failed; grouped rules remain disabled until the file is repaired or an explicit group toggle rewrites it: {error:#}"
+        ));
+    }
     agent.load_persistent_state(paths.state_dir.clone())
 }
 

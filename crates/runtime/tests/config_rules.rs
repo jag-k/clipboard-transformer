@@ -6,7 +6,7 @@ use ct_core::RuleEngine;
 use ct_runtime::config::{
     collect_config_sources_best_effort, ensure_default_config, json_schema_pretty, load_config,
     load_config_with_options, load_config_with_sources, sync_config_schema_contents_next_to,
-    sync_config_schema_next_to, validate_config, ConfigLoadOptions, ConfigWarning,
+    sync_config_schema_next_to, validate_config, ConfigLoadOptions, ConfigWarning, GroupStatus,
     CONFIG_SCHEMA_FILE_NAME, DEFAULT_CONFIG_YAML,
 };
 use sha2::{Digest, Sha256};
@@ -1465,6 +1465,25 @@ fn generated_schema_marks_rule_id_required() {
 }
 
 #[test]
+fn generated_schema_constrains_ignore_imported_groups_to_boolean_or_string_list() {
+    let schema: serde_json::Value = serde_json::from_str(&json_schema_pretty().unwrap()).unwrap();
+    let variants = schema["definitions"]["IgnoreImportedGroups"]["anyOf"]
+        .as_array()
+        .expect("ignore_imported_groups variants");
+
+    assert!(variants.iter().any(|variant| variant["type"] == "boolean"));
+    assert!(variants
+        .iter()
+        .any(|variant| { variant["type"] == "array" && variant["items"]["type"] == "string" }));
+    assert!(!variants.iter().any(|variant| {
+        matches!(
+            variant["type"].as_str(),
+            Some("string" | "number" | "object")
+        )
+    }));
+}
+
+#[test]
 fn default_config_removes_tracking_query_params() {
     let config: ct_runtime::ConfigDocument = serde_yaml::from_str(DEFAULT_CONFIG_YAML).unwrap();
     let mut engine = RuleEngine::compile(config.rules).unwrap();
@@ -1919,4 +1938,427 @@ fn effective_schema_includes_plugin_rule_variants() {
     )));
     // The plugins section is part of the document schema.
     assert!(schema.pointer("/properties/plugins").is_some());
+}
+
+#[test]
+fn yaml_rule_groups_are_parsed_and_inherited() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.yaml");
+    fs::write(
+        &path,
+        r#"
+groups:
+  privacy:
+    name: Privacy
+    status: visible
+rules:
+  - type: ruleset
+    id: outer
+    groups: [privacy]
+    rules:
+      - id: inner
+        groups: [experimental]
+        from: test
+        to: ok
+"#,
+    )
+    .unwrap();
+
+    let loaded = load_config_with_sources(&path).unwrap();
+    assert!(loaded.warnings.is_empty(), "{:?}", loaded.warnings);
+    let policy = loaded.group_policy;
+    assert_eq!(
+        policy.rule_groups.get("outer").unwrap().clone(),
+        ["privacy".to_string()]
+            .into_iter()
+            .collect::<std::collections::BTreeSet<_>>()
+    );
+    assert_eq!(
+        policy.rule_groups.get("inner").unwrap().clone(),
+        ["experimental".to_string(), "privacy".to_string()]
+            .into_iter()
+            .collect::<std::collections::BTreeSet<_>>()
+    );
+    assert_eq!(
+        policy.descriptors["privacy"].name.as_deref(),
+        Some("Privacy")
+    );
+    assert_eq!(
+        policy.descriptors["privacy"].status,
+        ct_runtime::config::GroupStatus::Visible
+    );
+}
+
+#[test]
+fn group_state_disables_rules_with_membership() {
+    use ct_runtime::config::GroupStatus;
+    use ct_runtime::state::GroupState;
+
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.yaml");
+    fs::write(
+        &path,
+        r#"
+groups:
+  experimental:
+    status: visible
+rules:
+  - id: rule
+    groups: [experimental]
+    from: test
+    to: ok
+"#,
+    )
+    .unwrap();
+
+    let loaded = load_config_with_sources(&path).unwrap();
+    let mut state = GroupState::default();
+    state.set_enabled("experimental", false);
+    let disabled = loaded.group_policy.disabled_rule_ids(&state);
+    assert!(disabled.contains("rule"));
+
+    state.set_enabled("experimental", true);
+    let disabled = loaded.group_policy.disabled_rule_ids(&state);
+    assert!(!disabled.contains("rule"));
+
+    assert_eq!(
+        loaded.group_policy.descriptors["experimental"].status,
+        GroupStatus::Visible
+    );
+}
+
+#[test]
+fn inherited_group_disable_reaches_every_compacted_ruleset_wrapper() {
+    use ct_runtime::state::GroupState;
+
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.yaml");
+    fs::write(
+        &path,
+        r#"
+rules:
+  - type: ruleset
+    id: outer
+    groups: [privacy]
+    rules:
+      - type: ruleset
+        id: middle
+        rules:
+          - id: leaf
+            from: cat
+            to: dog
+"#,
+    )
+    .unwrap();
+
+    let loaded = load_config_with_sources(&path).unwrap();
+    let mut state = GroupState::default();
+    state.set_enabled("privacy", false);
+    let disabled = loaded.group_policy.disabled_rule_ids(&state);
+    assert_eq!(
+        disabled,
+        [
+            "leaf".to_string(),
+            "middle".to_string(),
+            "outer".to_string()
+        ]
+        .into_iter()
+        .collect()
+    );
+    let mut engine = RuleEngine::compile(loaded.document.rules).unwrap();
+    assert!(engine
+        .try_apply_excluding(&ClipboardItem::from_text("cat"), &disabled)
+        .unwrap()
+        .is_none());
+}
+
+#[test]
+fn ignored_group_status_removes_membership() {
+    use ct_runtime::config::GroupStatus;
+    use ct_runtime::state::GroupState;
+
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.yaml");
+    fs::write(
+        &path,
+        r#"
+groups:
+  obsolete:
+    status: ignore
+rules:
+  - id: rule
+    groups: [obsolete]
+    from: test
+    to: ok
+"#,
+    )
+    .unwrap();
+
+    let loaded = load_config_with_sources(&path).unwrap();
+    let mut state = GroupState::default();
+    state.set_enabled("obsolete", false);
+    let disabled = loaded.group_policy.disabled_rule_ids(&state);
+    assert!(!disabled.contains("rule"));
+
+    assert_eq!(
+        loaded.group_policy.descriptors["obsolete"].status,
+        GroupStatus::Ignore
+    );
+    assert!(loaded.group_policy.is_ignored("obsolete"));
+}
+
+#[test]
+fn import_edge_groups_are_added_and_inherited() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join("shared.yaml"),
+        r#"
+rules:
+  - id: inner
+    from: test
+    to: ok
+"#,
+    )
+    .unwrap();
+    let root = dir.path().join("config.yaml");
+    fs::write(
+        &root,
+        r#"
+rules:
+  - import:
+      source: shared.yaml
+      groups: [shared]
+"#,
+    )
+    .unwrap();
+
+    let loaded = load_config_with_sources(&root).unwrap();
+    let policy = loaded.group_policy;
+    assert!(policy.rule_groups["inner"].contains("shared"));
+}
+
+#[test]
+fn ignore_imported_groups_strips_before_applying_edge_groups() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join("shared.yaml"),
+        r#"
+rules:
+  - id: inner
+    groups: [tracking]
+    from: test
+    to: ok
+"#,
+    )
+    .unwrap();
+    let root = dir.path().join("config.yaml");
+    fs::write(
+        &root,
+        r#"
+rules:
+  - import:
+      source: shared.yaml
+      groups: [privacy]
+      ignore_imported_groups: [tracking]
+"#,
+    )
+    .unwrap();
+
+    let loaded = load_config_with_sources(&root).unwrap();
+    let policy = loaded.group_policy;
+    assert!(!policy.rule_groups["inner"].contains("tracking"));
+    assert!(policy.rule_groups["inner"].contains("privacy"));
+}
+
+#[test]
+fn group_imports_merge_descriptors_from_other_files() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join("shared-groups.yaml"),
+        r#"
+groups:
+  privacy:
+    name: Privacy
+    description: Imported privacy group
+"#,
+    )
+    .unwrap();
+    let root = dir.path().join("config.yaml");
+    fs::write(
+        &root,
+        r#"
+group_imports:
+  - source: shared-groups.yaml
+rules:
+  - id: rule
+    groups: [privacy]
+    from: test
+    to: ok
+"#,
+    )
+    .unwrap();
+
+    let loaded = load_config_with_sources(&root).unwrap();
+    let descriptor = &loaded.group_policy.descriptors["privacy"];
+    assert_eq!(descriptor.name.as_deref(), Some("Privacy"));
+    assert_eq!(
+        descriptor.description.as_deref(),
+        Some("Imported privacy group")
+    );
+    // Default status for imported descriptors is hidden when not set on the edge.
+    assert_eq!(descriptor.status, GroupStatus::Hidden);
+}
+
+#[test]
+fn repeated_yaml_imports_merge_every_edge_group_onto_one_rule_copy() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join("shared.yaml"),
+        "rules:\n  - id: shared-rule\n    from: test\n    to: ok\n",
+    )
+    .unwrap();
+    let root = dir.path().join("config.yaml");
+    fs::write(
+        &root,
+        r#"
+rules:
+  - import:
+      source: shared.yaml
+      groups: [edge-a]
+  - import:
+      source: shared.yaml
+      groups: [edge-b]
+"#,
+    )
+    .unwrap();
+
+    let loaded = load_config_with_sources(&root).unwrap();
+    assert_eq!(loaded.document.rules.len(), 1);
+    assert_eq!(
+        loaded.group_policy.rule_groups["shared-rule"],
+        ["edge-a".to_string(), "edge-b".to_string()]
+            .into_iter()
+            .collect()
+    );
+}
+
+#[test]
+fn repeated_toml_imports_merge_every_edge_group_onto_one_rule_copy() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join("shared.toml"),
+        r#"
+[[rules]]
+id = "shared-rule"
+from = "test"
+to = "ok"
+"#,
+    )
+    .unwrap();
+    let root = dir.path().join("config.toml");
+    fs::write(
+        &root,
+        r#"
+[[rules]]
+[rules.import]
+source = "shared.toml"
+groups = ["edge-a"]
+
+[[rules]]
+[rules.import]
+source = "shared.toml"
+groups = ["edge-b"]
+"#,
+    )
+    .unwrap();
+
+    let loaded = load_config_with_sources(&root).unwrap();
+    assert_eq!(loaded.document.rules.len(), 1);
+    assert_eq!(
+        loaded.group_policy.rule_groups["shared-rule"],
+        ["edge-a".to_string(), "edge-b".to_string()]
+            .into_iter()
+            .collect()
+    );
+}
+
+#[test]
+fn later_group_import_wins_root_wins_and_sources_are_tracked() {
+    let dir = tempfile::tempdir().unwrap();
+    let first = dir.path().join("first.yaml");
+    let second = dir.path().join("second.yaml");
+    fs::write(
+        &first,
+        "groups:\n  shared:\n    name: First\n    status: hidden\n  imported-only:\n    name: First only\n",
+    )
+    .unwrap();
+    fs::write(
+        &second,
+        "groups:\n  shared:\n    name: Second\n    status: visible\n  imported-only:\n    name: Second only\n",
+    )
+    .unwrap();
+    let root = dir.path().join("config.yaml");
+    fs::write(
+        &root,
+        r#"
+groups:
+  shared:
+    name: Root
+    status: visible
+group_imports:
+  - source: first.yaml
+  - source: second.yaml
+rules:
+  - id: rule
+    groups: [shared, imported-only]
+    from: test
+    to: ok
+"#,
+    )
+    .unwrap();
+
+    let loaded = load_config_with_sources(&root).unwrap();
+    assert_eq!(
+        loaded.group_policy.descriptors["shared"].name.as_deref(),
+        Some("Root")
+    );
+    assert_eq!(
+        loaded.group_policy.descriptors["imported-only"]
+            .name
+            .as_deref(),
+        Some("Second only")
+    );
+    assert!(loaded.sources.contains(&first.canonicalize().unwrap()));
+    assert!(loaded.sources.contains(&second.canonicalize().unwrap()));
+    assert!(loaded.warnings.iter().any(|warning| matches!(
+        warning,
+        ConfigWarning::GroupImportConflict { id, .. } if id == "imported-only"
+    )));
+}
+
+#[test]
+fn group_import_cycles_are_reported_without_recursing_forever() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("config.yaml");
+    let shared = dir.path().join("shared.yaml");
+    fs::write(
+        &root,
+        "group_imports:\n  - source: shared.yaml\nrules:\n  - id: rule\n    from: test\n    to: ok\n",
+    )
+    .unwrap();
+    fs::write(
+        &shared,
+        "group_imports:\n  - source: config.yaml\ngroups:\n  shared:\n    name: Shared\n",
+    )
+    .unwrap();
+
+    let loaded = load_config_with_sources(&root).unwrap();
+    assert!(loaded
+        .warnings
+        .iter()
+        .any(|warning| matches!(warning, ConfigWarning::ImportCycle { .. })));
+    assert_eq!(
+        loaded.group_policy.descriptors["shared"].name.as_deref(),
+        Some("Shared")
+    );
 }

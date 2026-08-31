@@ -25,4 +25,5 @@ Check `<config_dir>/config.yaml`, then `config.toml`. Derived locations:
 
 - generated schema: `<config_dir>/clipboard-transformer.schema.json`;
 - plugins: `<config_dir>/plugins/*.wasm`;
-- remote import cache: `<state_dir>/url-imports/`.
+- remote import cache: `<state_dir>/url-imports/`;
+- group state: `<state_dir>/groups.json`.

@@ -49,3 +49,28 @@ locations, and malformed entries:
 clipboard-transformer config check
 clipboard-transformer rules view effective
 ```
+
+## Groups on imports
+
+An import edge can add groups to every rule it imports. `ignore_imported_groups`
+removes groups from the imported document before the edge groups are applied.
+
+```yaml
+rules:
+  - import:
+      source: rules/youtube.yaml
+      groups: [privacy]
+      ignore_imported_groups: [tracking]
+```
+
+`ignore_imported_groups: true` strips every group from the imported document.
+
+Repeated imports still contribute one copy of each rule. Group annotations from
+every edge targeting the same source are merged onto that copy, independent of
+edge order. For example, importing one source through `groups: [a]` and
+`groups: [b]` makes its rules depend on both groups.
+
+Top-level `group_imports` only imports descriptors. Root descriptors have the
+highest precedence; later metadata imports override earlier imports and emit a
+warning when their effective descriptors conflict. Every descriptor source is
+included in reload source tracking.

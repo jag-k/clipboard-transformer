@@ -126,6 +126,12 @@ pub struct ConfigDocument {
     /// Per-plugin permissions and settings, keyed by plugin id. Imported
     /// documents intentionally contribute rules only.
     pub plugins: BTreeMap<String, PluginConfig>,
+    /// Rule group descriptors, keyed by group ID.
+    #[serde(default)]
+    pub groups: BTreeMap<String, GroupDescriptor>,
+    /// Imports of group descriptors from other configuration documents.
+    #[serde(default, rename = "group_imports")]
+    pub group_imports: Vec<GroupImport>,
 }
 
 /// Per-plugin configuration under the top-level `plugins` mapping.
@@ -147,6 +153,54 @@ pub struct PluginPermissions {
     pub http: Vec<String>,
     /// Expands `$VAR`-style references in plugin settings before initialization.
     pub env_expansion: bool,
+}
+
+/// Visibility and activation policy for a rule group.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum GroupStatus {
+    /// The group is functional and shown in the desktop tray as a switch.
+    #[default]
+    Visible,
+    /// The group is functional but not shown in the tray.
+    Hidden,
+    /// The group label is removed from effective membership and ignored.
+    Ignore,
+}
+
+/// Presentation metadata for a rule group. The map key is the group ID.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct GroupDescriptor {
+    /// Optional short display label. Falls back to the group ID.
+    pub name: Option<String>,
+    /// Optional longer description for diagnostics and tray tooltips.
+    pub description: Option<String>,
+    /// Tray visibility and activation policy.
+    pub status: GroupStatus,
+}
+
+/// Import of group descriptors from another configuration document.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct GroupImport {
+    /// Path, file: URL, http: URL, or https: URL to import.
+    pub source: String,
+    /// Default status for descriptors from this source. Defaults to hidden.
+    #[serde(default)]
+    pub status: Option<GroupStatus>,
+}
+
+/// Controls which memberships authored inside an imported rule subtree are
+/// discarded before groups from the importing edge are applied.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(untagged)]
+pub enum IgnoreImportedGroups {
+    /// `true` strips every imported group. `false` is accepted as an explicit
+    /// no-op so the generated schema and runtime parser stay identical.
+    All(bool),
+    /// Strips only the listed group IDs.
+    List(Vec<String>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

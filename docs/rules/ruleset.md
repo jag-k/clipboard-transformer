@@ -27,6 +27,9 @@ children compose.
 Temporarily disabled children are skipped. Nested rules may use any built-in or
 plugin type, including another ruleset.
 
+A ruleset's `groups` are inherited by its children; children may add their own
+`groups`, and the effective membership is the union.
+
 For a ruleset, `formats` is a presence filter rather than an input priority and
 may name a binary native representation. The former `pipeline` and
 `full-pipeline` mode names are invalid; use `all-matching` and `all`.

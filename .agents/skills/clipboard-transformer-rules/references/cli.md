@@ -22,13 +22,17 @@ uses the same config-source contract:
 | `transform - --config '<yaml-or-toml>'` | inline document | Transform stdin with a self-contained config. |
 | `clipboard watch --config-file <path>` | file path | Observe clipboard changes without writing them back. |
 | `clipboard watch --config '<yaml-or-toml>'` | inline document | Observe using a self-contained config. |
+| `groups list` | config, file, inline, or system | List effective groups and their enablement state. |
+| `groups enable <id>` | config, file, inline, or system | Persist a group as enabled. |
+| `groups disable <id>` | config, file, inline, or system | Persist a group as disabled. |
 | `clipboard inspect` | system config/state | Describe the persisted latest item or explicitly read the clipboard. |
 | `doctor` | system paths | Print platform capabilities and path diagnostics. |
 
-`config check`, `rules list`, `rules view effective`, `transform`, and
-`clipboard watch` also accept `--plugin-dir <path>` and `--state-dir <path>`.
-Inline config discovers no plugins unless `--plugin-dir` is provided, does not
-expand imports, and conflicts with `--state-dir`.
+`config check`, `rules list`, `rules view effective`, `transform`, `groups`,
+and `clipboard watch` also accept `--plugin-dir <path>` and `--state-dir <path>`.
+`groups`, `transform`, and `watch` also accept `--group-state <path>` and
+`--ignore-group-state`. Inline config discovers no plugins unless `--plugin-dir`
+is provided, does not expand imports, and conflicts with `--state-dir`.
 
 `clipboard watch --transform` emits original and final transformed items;
 `--transform=transformed-only` omits non-matches. Output format is
@@ -45,7 +49,15 @@ selected config and plugin state. Text output is the default;
 `rules view effective` emits JSON by default; `--format yaml` serializes the
 same versioned representation as YAML. The only implemented view is
 `effective`. Future `authored` and `compiled` views require separate contracts
-and must not be inferred from the effective representation.
+and must not be inferred from the effective representation. The effective view
+includes resolved group descriptors and deduplicated inherited membership for
+every rule.
+
+Group-state writers read and update the latest document under a shared lock.
+Read-only commands fail on malformed state; repair it, delete it to reset all
+groups to enabled, or use `--ignore-group-state`. Explicit `groups enable` and
+`groups disable` commands overwrite a malformed file from the loaded in-memory
+snapshot (or a fresh empty state) and print a warning.
 
 ## Validation
 

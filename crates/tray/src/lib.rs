@@ -33,6 +33,7 @@ pub enum TrayAction {
     ClearHistory,
     SetAutostart(bool),
     SetPaused(bool),
+    SetGroupEnabled { group_id: String, enabled: bool },
     Quit,
 }
 

@@ -8,6 +8,7 @@ use serde_json::{json, Value};
 
 use super::AppConfig;
 use crate::plugins::PluginConfig;
+use ct_config::{GroupDescriptor, GroupImport, IgnoreImportedGroups};
 use ct_core::{AppMode, RulesetMode, UrlTransform, REGISTERED_RULE_TYPES};
 
 #[derive(Debug, Default, Serialize, JsonSchema)]
@@ -17,6 +18,12 @@ struct ConfigDocumentSchema {
     rules: Vec<ConfigRuleSchema>,
     /// Per-plugin permissions and settings, keyed by plugin id.
     plugins: BTreeMap<String, PluginConfig>,
+    /// Rule group descriptors, keyed by group ID.
+    #[serde(default)]
+    groups: BTreeMap<String, GroupDescriptor>,
+    /// Imports of group descriptors from other configuration documents.
+    #[serde(default, rename = "group_imports")]
+    group_imports: Vec<GroupImport>,
 }
 
 /// Top-level and nested rule entries. Assembled from import + each registered handler + unknown.
@@ -87,6 +94,13 @@ struct ExpandedImportSchema {
     /// Required SHA-256 pin when a URL import is allowed to contribute shell rules.
     #[serde(default)]
     sha256: Option<String>,
+    /// Group ids applied to every rule imported through this edge.
+    #[serde(default)]
+    groups: Vec<String>,
+    /// Strips groups from the imported document before applying the edge groups.
+    /// `true` strips all imported groups; a list strips the named ids.
+    #[serde(default)]
+    ignore_imported_groups: Option<IgnoreImportedGroups>,
 }
 
 #[derive(Debug, Default, Serialize, JsonSchema)]
@@ -116,6 +130,9 @@ struct RuleCommonSchema {
     /// How to interpret apps: blacklist skips listed apps; whitelist only allows listed apps.
     #[serde(default)]
     app_mode: Option<AppMode>,
+    /// Group IDs this rule belongs to. Inherited from outer rulesets.
+    #[serde(default)]
+    groups: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, Default, Serialize, JsonSchema)]
