@@ -16,6 +16,10 @@ jobs:
     env:
       VERSION: ${{ inputs.version }}
       TAG: ${{ inputs.tag }}
+      SOURCE_REPOSITORY: jag-k/clipboard-transformer
+      UPSTREAM_REPOSITORY: microsoft/winget-pkgs
+      UPSTREAM_BRANCH: master
+      GH_TOKEN: ${{ secrets.WINGET_CREATE_GITHUB_TOKEN }}
       WINGET_CREATE_GITHUB_TOKEN: ${{ secrets.WINGET_CREATE_GITHUB_TOKEN }}
     steps:
       - name: Check publishing token
@@ -25,23 +29,117 @@ jobs:
             throw "WinGet publication requires WINGET_CREATE_GITHUB_TOKEN"
           }
 
-      - name: Checkout source
-        uses: actions/checkout@v6
-        with:
-          persist-credentials: false
+      - name: Check for an existing submission
+        id: upstream
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+
+          # WingetCreate branches as {packageId}-{version}-{guid} and never
+          # inspects what it already submitted, so a re-run opens a second pull
+          # request for a version that is already merged or still under review.
+          # Neither duplicate is useful: WinGet keeps every published version in
+          # its own directory and never rewrites one, and a reviewer has to close
+          # the extra pull request by hand.
+          $skip = 'false'
+
+          $manifestPath = "manifests/j/JagK/ClipboardTransformer/$env:VERSION"
+          gh api "repos/$env:UPSTREAM_REPOSITORY/contents/$manifestPath" `
+            --silent 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Output "::notice::WinGet already publishes $env:VERSION"
+            $skip = 'true'
+          }
+
+          $owner = gh api user --jq '.login'
+          if ($LASTEXITCODE -ne 0 -or -not $owner) {
+            throw "Unable to identify the WINGET_CREATE_GITHUB_TOKEN owner"
+          }
+          $fork = "$owner/winget-pkgs"
+
+          $parent = gh api "repos/$fork" --jq '.parent.full_name'
+          if ($LASTEXITCODE -ne 0) {
+            throw "Fork ${fork} is unavailable to this token"
+          }
+          if ($parent -ne $env:UPSTREAM_REPOSITORY) {
+            throw "${fork} is not a fork of $env:UPSTREAM_REPOSITORY"
+          }
+
+          if ($skip -ne 'true') {
+            # Match on the branch prefix rather than searching pull requests:
+            # matching-refs is immediately consistent, and the trailing hyphen
+            # keeps 0.1.6 from matching 0.1.60. Branches left behind by merged or
+            # closed pull requests resolve to no open pull request and are
+            # ignored.
+            $prefix = "JagK.ClipboardTransformer-$env:VERSION-"
+            $branches = gh api `
+              "repos/$fork/git/matching-refs/heads/$prefix" `
+              --jq '.[].ref | sub("^refs/heads/"; "")'
+            if ($LASTEXITCODE -ne 0) {
+              throw "Unable to list submission branches in ${fork}"
+            }
+
+            foreach ($branch in @($branches | Where-Object { $_ })) {
+              $open = gh api `
+                "repos/$env:UPSTREAM_REPOSITORY/pulls?head=$($owner):$($branch)&state=open" `
+                --jq '.[0].html_url // empty'
+              if ($LASTEXITCODE -ne 0) {
+                throw "Unable to query open pull requests for ${branch}"
+              }
+              if ($open) {
+                Write-Output "::warning::$env:VERSION is already under review at $open; close it before re-running to submit a rebuilt manifest"
+                $skip = 'true'
+                break
+              }
+            }
+          }
+
+          "published=$skip" |
+            Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "owner=$owner" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "fork=$fork" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
+          exit 0
 
       - name: Download release notes
+        if: ${{ steps.upstream.outputs.published != 'true' }}
         uses: actions/download-artifact@v8
         with:
           name: release-notes
           path: release-notes
 
+      - name: Resolve release date
+        if: ${{ steps.upstream.outputs.published != 'true' }}
+        id: release_date
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+
+          # WingetCreate clears version specific fields during an update and
+          # only restores ReleaseDate when it is passed explicitly.
+          $publishedAt = gh api `
+            "repos/$env:SOURCE_REPOSITORY/releases/tags/$env:TAG" `
+            --jq '.published_at'
+          if ($LASTEXITCODE -ne 0 -or -not $publishedAt) {
+            throw "GitHub Release $env:TAG has no publication timestamp"
+          }
+
+          $releaseDate = ([datetimeoffset]$publishedAt).UtcDateTime.ToString(
+            'yyyy-MM-dd'
+          )
+          "release_date=$releaseDate" |
+            Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
+          exit 0
+
       - name: Install wingetcreate
+        if: ${{ steps.upstream.outputs.published != 'true' }}
         shell: pwsh
         run: Invoke-WebRequest https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
 
       - name: Generate updated manifests
+        if: ${{ steps.upstream.outputs.published != 'true' }}
         shell: pwsh
+        env:
+          RELEASE_DATE: ${{ steps.release_date.outputs.release_date }}
         run: |
           $tag = $env:TAG
           $version = $env:VERSION
@@ -53,9 +151,11 @@ jobs:
             -v $version `
             -t $env:WINGET_CREATE_GITHUB_TOKEN `
             --release-notes-url $releaseNotesUrl `
+            --release-date $env:RELEASE_DATE `
             --out target/winget-manifests
 
       - name: Add curated version metadata
+        if: ${{ steps.upstream.outputs.published != 'true' }}
         shell: pwsh
         run: |
           $tag = $env:TAG
@@ -86,6 +186,14 @@ jobs:
             throw "Default locale manifest has multiple ReleaseNotesUrl fields"
           }
 
+          # WinGet validation refused the icon block for this unsigned package,
+          # so the published manifests carry no Icons. Fail loudly rather than
+          # resurrecting metadata that the community repository already
+          # rejected.
+          if ($content -match "(?m)^Icons:") {
+            throw "Default locale manifest regained an Icons block; revisit WinGet icon policy"
+          }
+
           $indentedReleaseNotes = (
             $releaseNotes -split "`r?`n" |
             ForEach-Object { "  $_" }
@@ -100,22 +208,6 @@ jobs:
             "https://github\.com/jag-k/clipboard-transformer/blob/v[^/]+/", `
             $versionedBlobUrl
 
-          $versionedRawUrl = `
-            "https://raw.githubusercontent.com/jag-k/clipboard-transformer/$tag/"
-          $content = $content -replace `
-            "https://raw\.githubusercontent\.com/jag-k/clipboard-transformer/v[^/]+/", `
-            $versionedRawUrl
-
-          $iconHash = (
-            Get-FileHash assets/generated/windows/app-icon.ico -Algorithm SHA256
-          ).Hash
-          if ($content -notmatch "(?m)^  IconSha256:") {
-            throw "Default locale manifest has no versioned icon hash"
-          }
-          $content = $content -replace `
-            "(?m)^  IconSha256: [A-Fa-f0-9]{64}$", `
-            "  IconSha256: $iconHash"
-
           Set-Content `
             -Path $locale.FullName `
             -Value $content `
@@ -126,13 +218,48 @@ jobs:
             Out-File $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Upload generated manifests
+        if: ${{ steps.upstream.outputs.published != 'true' }}
         uses: actions/upload-artifact@v7
         with:
           name: winget-manifests-${{ inputs.version }}
           path: target/winget-manifests/**
           if-no-files-found: error
 
+      - name: Sync fork with upstream
+        if: ${{ steps.upstream.outputs.published != 'true' }}
+        shell: pwsh
+        env:
+          FORK: ${{ steps.upstream.outputs.fork }}
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+
+          $fork = $env:FORK
+
+          $upstreamSha = gh api `
+            "repos/$env:UPSTREAM_REPOSITORY/git/ref/heads/$env:UPSTREAM_BRANCH" `
+            --jq '.object.sha'
+          if ($LASTEXITCODE -ne 0 -or -not $upstreamSha) {
+            throw "Unable to read $env:UPSTREAM_REPOSITORY HEAD"
+          }
+
+          # WingetCreate branches from upstream HEAD and first syncs the fork by
+          # merging, which fails on a divergent fork and cannot create
+          # references in a fork that trails upstream by too many commits. The
+          # fork holds no work of its own, so reset it instead of merging.
+          gh api --method PATCH `
+            "repos/$fork/git/refs/heads/$env:UPSTREAM_BRANCH" `
+            -F sha=$upstreamSha `
+            -F force=true `
+            --silent
+          if ($LASTEXITCODE -ne 0) {
+            throw "Unable to reset ${fork} to $upstreamSha"
+          }
+
+          Write-Output "::notice::Reset ${fork} to $upstreamSha"
+          exit 0
+
       - name: Submit updated manifests
+        if: ${{ steps.upstream.outputs.published != 'true' }}
         shell: pwsh
         run: |
           .\wingetcreate.exe submit $env:MANIFEST_DIR `

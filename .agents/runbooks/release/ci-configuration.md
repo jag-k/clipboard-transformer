@@ -229,9 +229,10 @@ Scope: machine
 
 Also provide the repository homepage, issue tracker, versioned license URL,
 inline release notes plus the release-notes URL, installation and configuration
-documentation links, the immutable versioned Windows icon with its SHA-256,
-moniker `clipboard-transformer`, and relevant search tags. Leave `PrivacyUrl`
-unset until the project has an explicit privacy-policy URL.
+documentation links, moniker `clipboard-transformer`, and relevant search tags.
+Leave `PrivacyUrl` unset until the project has an explicit privacy-policy URL.
+Do not submit an `Icons` block: WinGet validation refused it for this unsigned
+package, and the accepted manifests carry no icon metadata.
 
 Review the generated installer manifest and retain these verified fields:
 
@@ -240,25 +241,49 @@ Review the generated installer manifest and retain these verified fields:
   `ElevationRequirement: elevationRequired`;
 - `UpgradeBehavior: install` and command `clipboard-transformer`;
 - the release date plus the MSI `ProductCode`;
-- an Apps & Features entry matching the MSI's display name, publisher,
-  display version, product code, stable upgrade code, and installer type.
+- an Apps & Features entry matching the MSI's display name, publisher, product
+  code, stable upgrade code, and installer type.
+
+Leave `DisplayVersion` out of the Apps & Features entry. WinGet review rejects a
+`DisplayVersion` equal to `PackageVersion`, and because WingetCreate refreshes
+Apps & Features fields only where the existing manifest already populates them,
+an omitted `DisplayVersion` stays omitted in every later update.
 
 WinGetCreate extracts version-specific installer values, but it may not
 preserve all curated metadata when bootstrapping a replacement manifest.
-Recheck the inline release notes, icon, documentation, installation note, and
+Recheck the inline release notes, documentation, installation note, and
 installer fields before submission. Do not reuse a previous version's
 installer hash or product code.
 
 For later accepted versions, `publish-winget.yml` runs WingetCreate in two
 phases. `update` first downloads the new MSI and refreshes the package version,
-installer URL, SHA-256, ProductCode, Apps & Features metadata, release date, and
-release-notes URL. The workflow then restores inline release notes from the
-same validated changelog artifact used by the GitHub Release, advances
-version-pinned license/documentation/icon URLs, recalculates the icon SHA-256,
-uploads the resulting manifests for inspection, and only then submits them
-with `wingetcreate submit`. This post-processing is required because
-WingetCreate deliberately clears inline `ReleaseNotes` during a non-interactive
-update and does not advance already-populated versioned metadata URLs.
+installer URL, SHA-256, ProductCode, and Apps & Features metadata. It clears
+`ReleaseNotes`, `ReleaseNotesUrl` and the release date as version-specific
+fields, and restores only the two the workflow passes explicitly:
+`--release-notes-url` and `--release-date`, the latter taken from the GitHub
+Release publication timestamp. The workflow then restores inline release notes
+from the same validated changelog artifact used by the GitHub Release, advances
+version-pinned license and documentation URLs, uploads the resulting manifests
+for inspection, and only then submits them with `wingetcreate submit`. This
+post-processing is required because WingetCreate deliberately clears inline
+`ReleaseNotes` during a non-interactive update and does not advance
+already-populated versioned metadata URLs.
+
+WingetCreate branches from the upstream `master` HEAD and picks up curated
+metadata from the newest version directory that is already merged, so a pull
+request still under review is never used as a base and its manual fixes are not
+inherited. Every fix that must survive belongs in this workflow. Each submission
+creates a fresh `{packageId}-{version}-{guid}` branch, so WingetCreate cannot
+recognise its own earlier submission; the workflow therefore skips before doing
+any work when the version is already merged upstream, or when a branch matching
+`JagK.ClipboardTransformer-<version>-` still has an open pull request. A skipped
+submission is a successful job with a warning: to submit a rebuilt manifest for
+a version under review, close that pull request first, then re-run the job.
+Before
+submitting, the workflow resets the fork's
+`master` to upstream HEAD: WingetCreate otherwise syncs by merging, which fails
+on a divergent fork, and a fork trailing upstream by too many commits cannot
+have new references created in it at all.
 
 Validate and sandbox-test the generated manifests as described in
 `packaging-verification.md`; the first PR also requires accepting the Microsoft
@@ -266,7 +291,12 @@ CLA.
 
 The official
 [`wingetcreate` CI guidance](https://github.com/microsoft/winget-create)
-uses a GitHub personal access token with classic `repo` scope. Store that token as
+documents a classic personal access token with `repo` scope. A fine-grained
+token needs read and write on `Contents`, `Metadata` and `Pull requests` for the
+`winget-pkgs` fork, plus read on this repository's `Contents` for the release
+lookup. Fine-grained tokens only carry write access to repositories owned by the
+selected owner, so if opening the pull request against `microsoft/winget-pkgs`
+is rejected, fall back to a classic token with `public_repo`. Store the token as
 `WINGET_CREATE_GITHUB_TOKEN`. It is used to create the manifest branch/fork and
 submit a pull request to `microsoft/winget-pkgs`; it does not push to this
 repository.

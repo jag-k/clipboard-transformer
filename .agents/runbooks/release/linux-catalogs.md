@@ -34,6 +34,14 @@ these restrictions apply. A separately
 hosted Flatpak repository provides automatic updates without implying Flathub
 acceptance or discovery in Flathub's catalog.
 
+The ostree repository is stored inside a git repository, and git cannot track
+empty directories. A fresh checkout of `jag-k/flatpak-repo` therefore loses
+`repo/refs/mirrors`, `repo/refs/remotes`, `repo/state` and `repo/tmp`, and
+`flatpak build-update-repo` then fails while listing refs. `publish-flatpak`
+recreates that layout before touching the repository; keep the `mkdir -p` step
+if the publishing script is reworked. Do not commit placeholder files under
+`repo/refs/`, because ostree reads those directories as ref names.
+
 ## Nix and nixpkgs are separate
 
 Users can install the project flake directly with:

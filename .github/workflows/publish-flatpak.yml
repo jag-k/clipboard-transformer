@@ -117,6 +117,16 @@ jobs:
           if [[ ! -f "${repository}/config" ]]; then
             ostree init --repo="${repository}" --mode=archive-z2
           fi
+          # The published repository is stored in git, which cannot track empty
+          # directories. Restore the ostree layout the checkout dropped so that
+          # ref listing and static delta generation keep working.
+          mkdir -p \
+            "${repository}/refs/heads" \
+            "${repository}/refs/mirrors" \
+            "${repository}/refs/remotes" \
+            "${repository}/extensions" \
+            "${repository}/state" \
+            "${repository}/tmp"
           flatpak build-import-bundle --update-appstream \
             "${repository}" "${bundle}"
           flatpak build-sign \
