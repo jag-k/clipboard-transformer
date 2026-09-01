@@ -1068,29 +1068,66 @@ struct ImportDirective {
     ignore_imported_groups: Option<IgnoreImportedGroups>,
 }
 
-fn mapping_import_directive(mapping: &Mapping) -> Option<ImportDirective> {
-    if mapping.len() != 1 {
-        return None;
+/// Rule-level representation of an import entry. `import` may be a short string
+/// or an expanded mapping; rule-level `groups` and `ignore_imported_groups`
+/// apply to either form and merge with the expanded mapping's own values.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ImportRule {
+    import: ImportValue,
+    #[serde(default)]
+    groups: Vec<String>,
+    #[serde(default)]
+    ignore_imported_groups: Option<IgnoreImportedGroups>,
+}
+
+fn merge_ignore_imported_groups(
+    a: Option<IgnoreImportedGroups>,
+    b: Option<IgnoreImportedGroups>,
+) -> Option<IgnoreImportedGroups> {
+    match (a, b) {
+        (None, other) | (other, None) => other,
+        (Some(IgnoreImportedGroups::All(true)), _) | (_, Some(IgnoreImportedGroups::All(true))) => {
+            Some(IgnoreImportedGroups::All(true))
+        }
+        (Some(IgnoreImportedGroups::All(false)), other)
+        | (other, Some(IgnoreImportedGroups::All(false))) => other,
+        (Some(IgnoreImportedGroups::List(mut a)), Some(IgnoreImportedGroups::List(b))) => {
+            a.extend(b);
+            a.sort();
+            a.dedup();
+            Some(IgnoreImportedGroups::List(a))
+        }
     }
-    let value = mapping
-        .get(YamlValue::String("import".to_string()))
-        .cloned()?;
-    let value = serde_yaml::from_value::<ImportValue>(value).ok()?;
-    Some(match value {
+}
+
+fn mapping_import_directive(mapping: &Mapping) -> Option<ImportDirective> {
+    let rule: ImportRule = serde_yaml::from_value(YamlValue::Mapping(mapping.clone())).ok()?;
+    Some(match rule.import {
         ImportValue::Short(source) => ImportDirective {
             source,
             shell: false,
             sha256: None,
-            groups: Vec::new(),
-            ignore_imported_groups: None,
+            groups: rule.groups,
+            ignore_imported_groups: rule.ignore_imported_groups,
         },
-        ImportValue::Expanded(import) => ImportDirective {
-            source: import.source,
-            shell: import.permissions.shell,
-            sha256: import.sha256,
-            groups: import.groups,
-            ignore_imported_groups: import.ignore_imported_groups,
-        },
+        ImportValue::Expanded(import) => {
+            let mut groups = rule.groups;
+            groups.extend(import.groups);
+            groups.sort();
+            groups.dedup();
+            let ignore_imported_groups = merge_ignore_imported_groups(
+                rule.ignore_imported_groups,
+                import.ignore_imported_groups,
+            );
+            ImportDirective {
+                source: import.source,
+                shell: import.permissions.shell,
+                sha256: import.sha256,
+                groups,
+                ignore_imported_groups,
+            }
+        }
     })
 }
 
@@ -1806,27 +1843,32 @@ fn load_imported_rules_by_format(
 }
 
 fn toml_import_directive(value: &toml::Value) -> Option<ImportDirective> {
-    let table = value.as_table()?;
-    if table.len() != 1 {
-        return None;
-    }
-    let import = table.get("import")?;
-    if let Some(source) = import.as_str() {
-        return Some(ImportDirective {
-            source: source.to_string(),
+    let rule: ImportRule = value.clone().try_into().ok()?;
+    Some(match rule.import {
+        ImportValue::Short(source) => ImportDirective {
+            source,
             shell: false,
             sha256: None,
-            groups: Vec::new(),
-            ignore_imported_groups: None,
-        });
-    }
-    let expanded: ExpandedImport = import.clone().try_into().ok()?;
-    Some(ImportDirective {
-        source: expanded.source,
-        shell: expanded.permissions.shell,
-        sha256: expanded.sha256,
-        groups: expanded.groups,
-        ignore_imported_groups: expanded.ignore_imported_groups,
+            groups: rule.groups,
+            ignore_imported_groups: rule.ignore_imported_groups,
+        },
+        ImportValue::Expanded(import) => {
+            let mut groups = rule.groups;
+            groups.extend(import.groups);
+            groups.sort();
+            groups.dedup();
+            let ignore_imported_groups = merge_ignore_imported_groups(
+                rule.ignore_imported_groups,
+                import.ignore_imported_groups,
+            );
+            ImportDirective {
+                source: import.source,
+                shell: import.permissions.shell,
+                sha256: import.sha256,
+                groups,
+                ignore_imported_groups,
+            }
+        }
     })
 }
 

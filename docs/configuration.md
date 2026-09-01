@@ -148,7 +148,10 @@ A group descriptor controls presentation and default mutability:
 - `status: ignore` — removed from evaluation and cannot be enabled.
 
 Undeclared groups used by rules are active by default and use the group id as
-their label. They are functional but not shown in the tray.
+their label. They default to `status: visible` and appear in the tray; declare
+a descriptor with `status: hidden` to keep one out of the tray. Only groups at
+least one rule uses are listed, in the tray and in `groups list`; a descriptor
+no rule references is ignored.
 
 Group descriptors can also be imported from other YAML/TOML files using
 top-level `group_imports`. Imported descriptors default to `status: hidden`

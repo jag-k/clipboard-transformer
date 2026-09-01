@@ -10,11 +10,14 @@ The format is based on [Keep a Changelog], and this project follows
 
 ### Added
 
-- **Rule groups:** Add `groups` and `group_imports` to the configuration, a
-  versioned `<state_dir>/groups.json` state document, tray switches for visible
-  groups, and `groups list` / `enable` / `disable` CLI commands. Group
-  membership is inherited from rulesets and import edges; ignored groups and
-  explicit group state disable the rules that depend on them.
+- **Rule groups:** (#29) Add `groups` and `group_imports` to the configuration, a
+  versioned `<state_dir>/groups.json` state document, tray switches for
+  rule-used groups with rule counts and descriptions, and `groups list` /
+  `enable` / `disable` CLI commands. Group membership is inherited from
+  rulesets and import edges; ignored groups and explicit group state disable
+  the rules that depend on them. Short-form import edges accept `groups` and
+  `ignore_imported_groups` as sibling keys, and group state may be written for
+  an id before any rule uses it.
 
 ### Changed
 

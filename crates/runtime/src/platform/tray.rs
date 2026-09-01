@@ -135,6 +135,8 @@ pub struct TrayGroup {
     pub id: String,
     pub label: String,
     pub enabled: bool,
+    pub rule_count: usize,
+    pub description: Option<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

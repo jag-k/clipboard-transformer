@@ -22,7 +22,7 @@ use crate::state::{
 };
 use ct_clipboard::{ClipboardBackend, ClipboardFingerprint, ClipboardFormat, ClipboardItem};
 use ct_core::{AppMatcher, AppliedRule, RuleEngine, TransformResult};
-use ct_i18n::human_duration;
+use ct_i18n::{human_duration, pluralize_rules};
 use ct_notifications::{
     EditTarget, NotificationBackend, StartupNotification, TransformNotification,
 };
@@ -210,20 +210,24 @@ where
 {
     pub fn new(clipboard: C, notifications: N, config: ConfigDocument) -> Result<Self> {
         let engine = RuleEngine::compile(config.rules.clone())?;
-        Self::new_with_engine(clipboard, notifications, config, engine)
+        let group_policy = GroupPolicy::from_document(&config);
+        Self::new_with_engine(clipboard, notifications, config, engine, group_policy)
     }
 
+    /// `group_policy` must come from the loader (`LoadedConfig::group_policy`):
+    /// hosts move `config.rules` into the engine before this call, so the
+    /// policy can no longer be derived from the document here.
     pub fn new_with_engine(
         clipboard: C,
         notifications: N,
         mut config: ConfigDocument,
         engine: RuleEngine,
+        group_policy: GroupPolicy,
     ) -> Result<Self> {
         let app_matcher = config.config.app_matcher()?;
         let tray_rule_count = engine.rule_count();
         let required_formats = engine.required_formats().clone();
         let rule_worker = RuleWorker::start(engine)?;
-        let group_policy = GroupPolicy::from_document(&config);
         // The worker owns the compiled rules. Keeping the complete imported
         // RawRule tree in Agent duplicates large rule lists for no runtime
         // benefit; ConfigReloader retains the source document it needs for
@@ -514,12 +518,30 @@ where
         let (visible_groups, group_overflow) = self
             .group_policy
             .visible_groups(crate::groups::MAX_VISIBLE_TRAY_GROUPS);
+        let mut group_rule_counts: std::collections::BTreeMap<String, usize> = visible_groups
+            .iter()
+            .map(|(id, _)| (id.clone(), 0))
+            .collect();
+        for groups in self.group_policy.rule_groups.values() {
+            for group in groups {
+                if let Some(count) = group_rule_counts.get_mut(group) {
+                    *count += 1;
+                }
+            }
+        }
         let groups = visible_groups
             .into_iter()
             .map(|(id, descriptor)| {
                 let label = descriptor.name.clone().unwrap_or_else(|| id.clone());
                 let enabled = self.group_state_loaded && self.group_state.is_enabled(&id);
-                crate::platform::tray::TrayGroup { id, label, enabled }
+                let rule_count = group_rule_counts.get(&id).copied().unwrap_or(0);
+                crate::platform::tray::TrayGroup {
+                    id,
+                    label,
+                    enabled,
+                    rule_count,
+                    description: descriptor.description,
+                }
             })
             .collect();
         TraySnapshot {
@@ -1150,6 +1172,7 @@ where
             reload::ReloadOutcome::Applied {
                 config,
                 engine,
+                group_policy,
                 rule_count,
                 watched_sources,
                 rule_sources,
@@ -1166,7 +1189,7 @@ where
                 self.rule_epoch = self.rule_epoch.wrapping_add(1);
                 self.queued_rule_job = None;
                 self.app_matcher = app_matcher;
-                self.group_policy = GroupPolicy::from_document(&config);
+                self.group_policy = group_policy;
                 config.rules.clear();
                 self.configure_last_clipboard_persistence(config.config.persist_last_clipboard);
                 self.config = config;
@@ -1544,14 +1567,6 @@ fn rule_labels(rules: &[AppliedRule]) -> Vec<String> {
     rules.iter().map(|rule| rule.label().to_string()).collect()
 }
 
-fn pluralize_rules(count: usize) -> &'static str {
-    if count == 1 {
-        "rule"
-    } else {
-        "rules"
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1664,6 +1679,44 @@ mod tests {
 
         assert!(agent.config.rules.is_empty());
         assert!(agent.tray_rule_count > 0);
+    }
+
+    #[test]
+    fn tray_groups_survive_rules_moving_into_the_engine_before_agent_construction() {
+        // The desktop bootstrap moves `document.rules` into the engine before
+        // the agent exists, so the loader-built group policy is the only one
+        // that still sees rule membership.
+        let mut document = config();
+        document.groups.insert(
+            "privacy".into(),
+            crate::config::GroupDescriptor {
+                name: Some("Privacy".into()),
+                description: Some("Removes tracking parameters".into()),
+                status: crate::config::GroupStatus::Visible,
+            },
+        );
+        document.rules[0].groups.push("privacy".into());
+        let group_policy = GroupPolicy::from_document(&document);
+        let engine = RuleEngine::compile(std::mem::take(&mut document.rules)).unwrap();
+
+        let agent = Agent::new_with_engine(
+            MemoryClipboardBackend::new(None),
+            NoopNotificationBackend::default(),
+            document,
+            engine,
+            group_policy,
+        )
+        .unwrap();
+
+        let snapshot = agent.tray_snapshot();
+        assert_eq!(snapshot.groups.len(), 1);
+        assert_eq!(snapshot.groups[0].id, "privacy");
+        assert_eq!(snapshot.groups[0].label, "Privacy");
+        assert_eq!(snapshot.groups[0].rule_count, 1);
+        assert_eq!(
+            snapshot.groups[0].description.as_deref(),
+            Some("Removes tracking parameters")
+        );
     }
 
     #[test]
@@ -2298,6 +2351,7 @@ mod tests {
 
         agent
             .handle_event(AppEvent::ConfigReloaded(reload::ReloadOutcome::Applied {
+                group_policy: GroupPolicy::from_document(&document),
                 config: Box::new(document),
                 engine,
                 rule_count: 1,
@@ -2326,6 +2380,7 @@ mod tests {
 
         agent
             .handle_event(AppEvent::ConfigReloaded(reload::ReloadOutcome::Applied {
+                group_policy: GroupPolicy::from_document(&document),
                 config: Box::new(document),
                 engine,
                 rule_count: 1,
@@ -2354,6 +2409,7 @@ mod tests {
 
         agent
             .handle_event(AppEvent::ConfigReloaded(reload::ReloadOutcome::Applied {
+                group_policy: GroupPolicy::from_document(&document),
                 config: Box::new(document),
                 engine,
                 rule_count: 1,

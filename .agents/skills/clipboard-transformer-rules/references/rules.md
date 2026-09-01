@@ -156,8 +156,11 @@ groups:
   tray;
 - `status: ignore` — removed from evaluation and cannot be toggled.
 
-Undeclared groups are active by default, use the group id as their label, and
-are not shown in the tray.
+Only groups at least one rule uses are listed, in the tray and in
+`groups list`: a descriptor no rule references is ignored, as are group-state
+entries for groups absent from the current rules. Undeclared groups are active
+by default, use the group id as their label, and default to `status: visible`,
+so they appear in the tray unless declared `hidden` or `ignore`.
 
 Group descriptors can be imported from other files with top-level
 `group_imports`. Imported descriptors default to `status: hidden` unless the
@@ -166,8 +169,11 @@ imports win over earlier imports. Repeated rule-import edges merge their group
 annotations onto the single deduplicated rule copy.
 
 Group state is stored in `<state_dir>/groups.json`. The CLI `groups list`,
-`groups enable`, and `groups disable` read or mutate this state. Use
-`--group-state <path>` to select a file and `--ignore-group-state` to ignore it.
+`groups enable`, and `groups disable` read or mutate this state. State may be
+written for a group id before any rule uses it — for example to pre-disable a
+group whose rules are not added yet — and applies once rules reference the id.
+Use `--group-state <path>` to select a file and `--ignore-group-state` to
+ignore it.
 Writers lock and atomically update the latest document; if the file is
 malformed, an explicit write overwrites it from the last in-memory snapshot (or
 a fresh empty state). The desktop watches state independently from

@@ -218,6 +218,9 @@ pub fn run() -> Result<()> {
     let watched_sources = std::mem::take(&mut loaded.sources);
     let remote_imports = std::mem::take(&mut loaded.remote_imports);
     let import_refresh_interval = loaded.document.config.import_refresh_interval;
+    // Built by the loader before `document.rules` was moved into the engine;
+    // the agent can no longer derive it from the emptied document.
+    let group_policy = std::mem::take(&mut loaded.group_policy);
     let agent_document = loaded.document;
     let mut reloader = ct_runtime::app::reload::ConfigReloader::new(
         config_path.clone(),
@@ -258,7 +261,13 @@ pub fn run() -> Result<()> {
             return Err(error);
         }
     };
-    let mut agent = match Agent::new_with_engine(clipboard, notifications, agent_document, engine) {
+    let mut agent = match Agent::new_with_engine(
+        clipboard,
+        notifications,
+        agent_document,
+        engine,
+        group_policy,
+    ) {
         Ok(agent) => agent,
         Err(error) => {
             deliver_startup_failure(&config_path, &error, disable_for);

@@ -91,6 +91,51 @@ pub fn build_menu_model(snapshot: &TraySnapshot) -> TrayMenu {
     }
     items.push(TrayMenuItem::Separator);
 
+    if !snapshot.groups.is_empty() {
+        items.push(entry(TrayMenuEntry::informational(
+            "groups-header",
+            format!(
+                "Groups ({})",
+                snapshot.groups.len() + snapshot.group_overflow
+            ),
+        )));
+        for group in &snapshot.groups {
+            let rules = format!(
+                "{} {}",
+                group.rule_count,
+                ct_i18n::pluralize_rules(group.rule_count)
+            );
+            let subtitle = match group.description.as_deref() {
+                Some(description) if !description.trim().is_empty() => {
+                    format!("{rules} • {description}")
+                }
+                _ => rules,
+            };
+            let mut toggle = TrayMenuEntry::action(
+                format!("group:{}", group.id),
+                TrayLabel::new(group.label.clone())
+                    .subtitle(subtitle)
+                    .single_line(format!("{} ({})", group.label, group.rule_count)),
+                TrayAction::SetGroupEnabled {
+                    group_id: group.id.clone(),
+                    enabled: !group.enabled,
+                },
+                None,
+            );
+            toggle.checked = Some(group.enabled);
+            items.push(entry(toggle));
+        }
+        if snapshot.group_overflow > 0 {
+            items.push(entry(TrayMenuEntry::action(
+                "groups-overflow",
+                format!("{} more group(s) — Open config", snapshot.group_overflow),
+                TrayAction::OpenConfig,
+                None,
+            )));
+        }
+        items.push(TrayMenuItem::Separator);
+    }
+
     if !snapshot.plugins.is_empty() {
         let attention_count = snapshot
             .plugins
@@ -159,35 +204,6 @@ pub fn build_menu_model(snapshot: &TraySnapshot) -> TrayMenu {
                 None,
             )));
             items.push(entry(submenu));
-        }
-        items.push(TrayMenuItem::Separator);
-    }
-
-    if !snapshot.groups.is_empty() {
-        items.push(entry(TrayMenuEntry::informational(
-            "groups-header",
-            "Groups",
-        )));
-        for group in &snapshot.groups {
-            let mut toggle = TrayMenuEntry::action(
-                format!("group:{}", group.id),
-                group.label.as_str(),
-                TrayAction::SetGroupEnabled {
-                    group_id: group.id.clone(),
-                    enabled: !group.enabled,
-                },
-                None,
-            );
-            toggle.checked = Some(group.enabled);
-            items.push(entry(toggle));
-        }
-        if snapshot.group_overflow > 0 {
-            items.push(entry(TrayMenuEntry::action(
-                "groups-overflow",
-                format!("{} more group(s) — Open config", snapshot.group_overflow),
-                TrayAction::OpenConfig,
-                None,
-            )));
         }
         items.push(TrayMenuItem::Separator);
     }
@@ -376,6 +392,8 @@ mod tests {
             id: "privacy".into(),
             label: "Privacy".into(),
             enabled: true,
+            rule_count: 1,
+            description: None,
         });
         snapshot.group_overflow = 3;
 
@@ -386,6 +404,87 @@ mod tests {
             .title_for(TrayPlatform::current())
             .contains("3 more"));
         assert_eq!(overflow.command, Some(TrayAction::OpenConfig));
+    }
+
+    #[test]
+    fn group_section_shows_total_count_and_rule_counts() {
+        let mut snapshot = snapshot();
+        snapshot.groups = vec![
+            crate::platform::tray::TrayGroup {
+                id: "privacy".into(),
+                label: "Privacy".into(),
+                enabled: true,
+                rule_count: 5,
+                description: Some("Removes tracking parameters".into()),
+            },
+            crate::platform::tray::TrayGroup {
+                id: "ads".into(),
+                label: "Ads".into(),
+                enabled: false,
+                rule_count: 1,
+                description: None,
+            },
+        ];
+
+        let menu = build_menu_model(&snapshot);
+        let header = find_entry(&menu.items, "groups-header");
+        assert!(header
+            .label
+            .title_for(TrayPlatform::current())
+            .contains("Groups (2)"));
+        let privacy = find_entry(&menu.items, "group:privacy");
+        assert_eq!(privacy.label.title_for(TrayPlatform::current()), "Privacy");
+        assert_eq!(
+            privacy.label.subtitle_for(TrayPlatform::current()),
+            Some("5 rules • Removes tracking parameters")
+        );
+        assert_eq!(
+            privacy.label.single_line_for(TrayPlatform::current()),
+            "Privacy (5)"
+        );
+        assert_eq!(privacy.checked, Some(true));
+        let ads = find_entry(&menu.items, "group:ads");
+        assert_eq!(ads.label.title_for(TrayPlatform::current()), "Ads");
+        // No description: the separator goes away with it, and the count
+        // singularizes.
+        assert_eq!(
+            ads.label.subtitle_for(TrayPlatform::current()),
+            Some("1 rule")
+        );
+        assert_eq!(
+            ads.label.single_line_for(TrayPlatform::current()),
+            "Ads (1)"
+        );
+        assert_eq!(ads.checked, Some(false));
+    }
+
+    #[test]
+    fn the_groups_section_precedes_plugins() {
+        let mut snapshot = snapshot();
+        snapshot.groups.push(crate::platform::tray::TrayGroup {
+            id: "privacy".into(),
+            label: "Privacy".into(),
+            enabled: true,
+            rule_count: 1,
+            description: None,
+        });
+        snapshot.plugins.push(crate::platform::tray::TrayPlugin {
+            id: "plugin".into(),
+            name: "Plugin".into(),
+            state: "operational",
+            issues: Vec::new(),
+            requires_attention: false,
+            module_path: PathBuf::from("/tmp/plugin.wasm"),
+        });
+
+        let menu = build_menu_model(&snapshot);
+        let position = |id: &str| {
+            menu.items
+                .iter()
+                .position(|item| matches!(item, TrayMenuItem::Entry(entry) if entry.id == id))
+                .unwrap_or_else(|| panic!("missing tray menu entry {id}"))
+        };
+        assert!(position("groups-header") < position("plugins-header"));
     }
 
     #[test]

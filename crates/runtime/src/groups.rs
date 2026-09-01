@@ -69,18 +69,21 @@ impl GroupPolicy {
     }
 
     /// Return visible groups, limited to a reasonable tray size.
+    /// Groups used by at least one rule are shown unless their descriptor status
+    /// is `Hidden` or `Ignore`. A missing descriptor defaults to `Visible`.
     pub fn visible_groups(&self, limit: usize) -> (Vec<(String, GroupDescriptor)>, usize) {
         let mut visible: Vec<_> = self
-            .descriptors
-            .iter()
-            .filter(|(id, descriptor)| {
-                descriptor.status == GroupStatus::Visible
-                    && self
-                        .rule_groups
-                        .values()
-                        .any(|groups| groups.contains(id.as_str()))
+            .rule_groups
+            .values()
+            .flat_map(|groups| groups.iter().cloned())
+            .filter(|id| !self.is_ignored(id))
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .map(|id| {
+                let descriptor = self.descriptors.get(&id).cloned().unwrap_or_default();
+                (id, descriptor)
             })
-            .map(|(id, descriptor)| (id.clone(), descriptor.clone()))
+            .filter(|(_, descriptor)| descriptor.status == GroupStatus::Visible)
             .collect();
         let overflow = visible.len().saturating_sub(limit);
         visible.truncate(limit);
@@ -418,6 +421,68 @@ mod tests {
         assert_eq!(visible.len(), 2);
         assert_eq!(overflow, 1);
         assert_eq!(policy.controlled_rule_ids().len(), 3);
+    }
+
+    #[test]
+    fn visible_groups_default_to_visible_when_descriptor_is_missing() {
+        let mut policy = GroupPolicy::default();
+        policy
+            .rule_groups
+            .insert("rule".into(), ["url-cleanup".into()].into_iter().collect());
+
+        let (visible, overflow) = policy.visible_groups(64);
+        assert_eq!(visible.len(), 1);
+        assert_eq!(visible[0].0, "url-cleanup");
+        assert_eq!(overflow, 0);
+    }
+
+    #[test]
+    fn visible_groups_skip_descriptors_no_rule_uses() {
+        let mut policy = GroupPolicy::default();
+        policy.descriptors.insert(
+            "unused".into(),
+            GroupDescriptor {
+                status: GroupStatus::Visible,
+                ..GroupDescriptor::default()
+            },
+        );
+        policy
+            .rule_groups
+            .insert("rule".into(), ["used".into()].into_iter().collect());
+
+        let (visible, overflow) = policy.visible_groups(64);
+        assert_eq!(visible.len(), 1);
+        assert_eq!(visible[0].0, "used");
+        assert_eq!(overflow, 0);
+    }
+
+    #[test]
+    fn visible_groups_respect_hidden_and_ignore_status() {
+        let mut policy = GroupPolicy::default();
+        policy.rule_groups.insert(
+            "rule".into(),
+            ["visible".into(), "hidden".into(), "ignored".into()]
+                .into_iter()
+                .collect(),
+        );
+        policy.descriptors.insert(
+            "hidden".into(),
+            GroupDescriptor {
+                status: GroupStatus::Hidden,
+                ..GroupDescriptor::default()
+            },
+        );
+        policy.descriptors.insert(
+            "ignored".into(),
+            GroupDescriptor {
+                status: GroupStatus::Ignore,
+                ..GroupDescriptor::default()
+            },
+        );
+
+        let (visible, _) = policy.visible_groups(64);
+        assert_eq!(visible.len(), 1);
+        assert_eq!(visible[0].0, "visible");
     }
 
     #[cfg(feature = "desktop")]

@@ -82,6 +82,16 @@ pub fn absolute_time(when: SystemTime) -> String {
         .to_string()
 }
 
+/// The English singular/plural for rule-count labels shared by notifications
+/// and the tray: `1 rule`, any other count `rules`.
+pub fn pluralize_rules(count: usize) -> &'static str {
+    if count == 1 {
+        "rule"
+    } else {
+        "rules"
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -112,5 +122,12 @@ mod tests {
         let formatted = relative_time(SystemTime::now() - Duration::from_secs(120));
 
         assert!(!formatted.is_empty());
+    }
+
+    #[test]
+    fn pluralize_rules_distinguishes_the_singular() {
+        assert_eq!(pluralize_rules(0), "rules");
+        assert_eq!(pluralize_rules(1), "rule");
+        assert_eq!(pluralize_rules(2), "rules");
     }
 }

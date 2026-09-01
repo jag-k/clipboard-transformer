@@ -11,13 +11,24 @@ paths resolve from the importing file. YAML and TOML may import each other.
 Extensionless content is tried as YAML and then TOML. Only rules are imported;
 an imported `config` section is ignored.
 
-The short string form is enough for ordinary imports. The expanded form carries
-the trust grant and required pin for remote shell code:
+The short string form is enough for ordinary imports. Edge `groups` and
+`ignore_imported_groups` can be written as sibling keys:
+
+```yaml
+rules:
+  - import: rules/youtube.yaml
+    groups: [privacy]
+    ignore_imported_groups: [tracking]
+```
+
+The expanded form carries the same fields and the trust grant for remote shell
+rules:
 
 ```yaml
 rules:
   - import:
       source: https://example.com/trusted-rules.yaml
+      groups: [privacy]
       permissions:
         shell: true
       sha256: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef

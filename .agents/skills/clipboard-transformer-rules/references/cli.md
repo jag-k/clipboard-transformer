@@ -22,9 +22,9 @@ uses the same config-source contract:
 | `transform - --config '<yaml-or-toml>'` | inline document | Transform stdin with a self-contained config. |
 | `clipboard watch --config-file <path>` | file path | Observe clipboard changes without writing them back. |
 | `clipboard watch --config '<yaml-or-toml>'` | inline document | Observe using a self-contained config. |
-| `groups list` | config, file, inline, or system | List effective groups and their enablement state. |
-| `groups enable <id>` | config, file, inline, or system | Persist a group as enabled. |
-| `groups disable <id>` | config, file, inline, or system | Persist a group as disabled. |
+| `groups list` | config, file, inline, or system | List rule-used groups and their enablement state. |
+| `groups enable <id>` | config, file, inline, or system | Persist a group as enabled; the id may be unused by rules so far. |
+| `groups disable <id>` | config, file, inline, or system | Persist a group as disabled; the id may be unused by rules so far. |
 | `clipboard inspect` | system config/state | Describe the persisted latest item or explicitly read the clipboard. |
 | `doctor` | system paths | Print platform capabilities and path diagnostics. |
 

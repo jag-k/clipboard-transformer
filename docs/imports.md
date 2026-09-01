@@ -55,6 +55,17 @@ clipboard-transformer rules view effective
 An import edge can add groups to every rule it imports. `ignore_imported_groups`
 removes groups from the imported document before the edge groups are applied.
 
+The short form supports `groups` and `ignore_imported_groups` as sibling keys:
+
+```yaml
+rules:
+  - import: rules/youtube.yaml
+    groups: [privacy]
+    ignore_imported_groups: [tracking]
+```
+
+The expanded form is equivalent:
+
 ```yaml
 rules:
   - import:

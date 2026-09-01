@@ -2138,6 +2138,38 @@ rules:
 }
 
 #[test]
+fn short_import_form_supports_rule_level_groups() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join("shared.yaml"),
+        r#"
+rules:
+  - id: inner
+    groups: [tracking]
+    from: test
+    to: ok
+"#,
+    )
+    .unwrap();
+    let root = dir.path().join("config.yaml");
+    fs::write(
+        &root,
+        r#"
+rules:
+  - import: shared.yaml
+    groups: [privacy]
+    ignore_imported_groups: [tracking]
+"#,
+    )
+    .unwrap();
+
+    let loaded = load_config_with_sources(&root).unwrap();
+    let policy = loaded.group_policy;
+    assert!(!policy.rule_groups["inner"].contains("tracking"));
+    assert!(policy.rule_groups["inner"].contains("privacy"));
+}
+
+#[test]
 fn ignore_imported_groups_strips_before_applying_edge_groups() {
     let dir = tempfile::tempdir().unwrap();
     fs::write(
@@ -2280,6 +2312,38 @@ groups = ["edge-b"]
             .into_iter()
             .collect()
     );
+}
+
+#[test]
+fn toml_short_import_form_supports_rule_level_groups() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join("shared.toml"),
+        r#"
+[[rules]]
+id = "inner"
+groups = ["tracking"]
+from = "test"
+to = "ok"
+"#,
+    )
+    .unwrap();
+    let root = dir.path().join("config.toml");
+    fs::write(
+        &root,
+        r#"
+[[rules]]
+import = "shared.toml"
+groups = ["privacy"]
+ignore_imported_groups = ["tracking"]
+"#,
+    )
+    .unwrap();
+
+    let loaded = load_config_with_sources(&root).unwrap();
+    let policy = loaded.group_policy;
+    assert!(!policy.rule_groups["inner"].contains("tracking"));
+    assert!(policy.rule_groups["inner"].contains("privacy"));
 }
 
 #[test]

@@ -73,6 +73,13 @@ struct UrlRuleSchema {
 struct ImportRuleSchema {
     /// Path, file: URL, http: URL, or https: URL to import. Extensionless imports are parsed as YAML first, then TOML. Only imported rules are used; an imported config section is intentionally ignored. Known page URLs for GitHub files, GitHub Gists, GitLab files, GitLab snippets, Pastebin, Rentry, Hastebin, dpaste.org, Bitbucket files, and Codeberg/Gitea files are automatically converted to raw download URLs. Direct paste.rs, 0x0.st, and ttm.sh links are supported as regular URL imports.
     import: ImportSchemaValue,
+    /// Group ids applied to every rule imported through this edge.
+    #[serde(default)]
+    groups: Vec<String>,
+    /// Strips groups from the imported document before applying the edge groups.
+    /// `true` strips all imported groups; a list strips the named ids.
+    #[serde(default)]
+    ignore_imported_groups: Option<IgnoreImportedGroups>,
 }
 
 #[derive(Debug, Serialize, JsonSchema)]

@@ -1438,20 +1438,23 @@ fn init_config(config_file: Option<PathBuf>) -> Result<()> {
     Ok(())
 }
 
+/// Groups surfaced by `groups list`: only groups at least one rule uses.
+/// Descriptors without rules and stale state entries are ignored.
+fn listed_group_ids(
+    policy: &ct_runtime::groups::GroupPolicy,
+) -> std::collections::BTreeSet<String> {
+    policy
+        .rule_groups
+        .values()
+        .flat_map(|groups| groups.iter().cloned())
+        .collect()
+}
+
 fn run_groups_command(command: GroupsCommand) -> Result<()> {
     match command {
         GroupsCommand::List { inputs } => {
             let cli = load_cli_config(&inputs)?;
-            let used_groups: std::collections::BTreeSet<_> = cli
-                .loaded
-                .group_policy
-                .rule_groups
-                .values()
-                .flat_map(|groups| groups.iter())
-                .cloned()
-                .collect();
-            let mut all_groups = used_groups;
-            all_groups.extend(cli.loaded.group_policy.descriptors.keys().cloned());
+            let all_groups = listed_group_ids(&cli.loaded.group_policy);
             if all_groups.is_empty() {
                 println!("no groups");
                 return Ok(());
@@ -1487,10 +1490,11 @@ fn toggle_group(inputs: &ConfigInputs, id: &str, enabled: bool) -> Result<()> {
         .group_policy
         .rule_groups
         .values()
-        .any(|groups| groups.contains(id))
-        || cli.loaded.group_policy.descriptors.contains_key(id);
+        .any(|groups| groups.contains(id));
     if !known {
-        bail!("unknown group {id:?}");
+        // Pre-seeding state for rules not yet written is supported; note it so
+        // a typo does not look like a successful toggle of an existing group.
+        eprintln!("note: {id:?} is not used by any rule yet; the state applies once it is");
     }
     let Some(path) = cli.group_state_path else {
         bail!("cannot save group state without a state directory or explicit --group-state");
@@ -2433,6 +2437,49 @@ rules:
                 .ends_with("config.yaml")
         );
         assert!(view["rule_sources"]["fragment"]["line"].as_u64().unwrap() > 0);
+    }
+
+    #[test]
+    fn groups_list_ignores_descriptors_no_rule_uses() {
+        let dir = tempfile::tempdir().unwrap();
+        let config_path = dir.path().join("config.yaml");
+        fs::write(
+            &config_path,
+            r#"
+groups:
+  used:
+    name: Used
+  unused:
+    name: Unused
+rules:
+  - id: rule
+    groups: [used]
+    from: cat
+    to: dog
+"#,
+        )
+        .unwrap();
+        let loaded = load_config_with_options(&config_path, ConfigLoadOptions::default()).unwrap();
+
+        let ids = listed_group_ids(&loaded.group_policy);
+
+        assert_eq!(ids.into_iter().collect::<Vec<_>>(), ["used"]);
+    }
+
+    #[test]
+    fn groups_toggle_allows_group_ids_no_rule_uses_yet() {
+        let dir = tempfile::tempdir().unwrap();
+        let state_path = dir.path().join("isolated-groups.json");
+        let inputs = ConfigInputs {
+            config: Some("rules:\n  - id: rule\n    from: cat\n    to: dog\n".to_string()),
+            group_state: Some(state_path.clone()),
+            state_dir: Some(dir.path().to_path_buf()),
+            ..ConfigInputs::default()
+        };
+
+        toggle_group(&inputs, "privacy", false).unwrap();
+
+        assert!(!GroupState::load(&state_path).unwrap().is_enabled("privacy"));
     }
 
     #[test]

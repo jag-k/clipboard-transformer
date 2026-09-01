@@ -14,6 +14,7 @@ use crate::config::{
     collect_config_sources_best_effort_with_options, load_config_with_options, ConfigDocument,
     ConfigLoadOptions, ConfigWarning, RuleSource,
 };
+use crate::groups::GroupPolicy;
 use crate::logging;
 use crate::platform::environment::EnvironmentRefreshMode;
 use crate::plugins::{PluginCatalog, PluginLimits, PluginSet, PluginStatus};
@@ -145,6 +146,7 @@ pub enum ReloadOutcome {
     Applied {
         config: Box<ConfigDocument>,
         engine: RuleEngine,
+        group_policy: GroupPolicy,
         rule_count: usize,
         watched_sources: BTreeSet<PathBuf>,
         rule_sources: BTreeMap<String, RuleSource>,
@@ -540,6 +542,7 @@ impl ConfigReloader {
         Ok(ReloadOutcome::Applied {
             config: Box::new(loaded.document),
             engine,
+            group_policy: loaded.group_policy,
             rule_count,
             watched_sources: loaded.sources,
             rule_sources: loaded.rule_sources,
