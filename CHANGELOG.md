@@ -21,9 +21,10 @@ The format is based on [Keep a Changelog], and this project follows
 
 ### Changed
 
-- **Dependencies:** Update `clap`, `zbus`, `timeago`, and `schemars`. Keep the
-  plugin-author and runtime configuration schemas on draft-07 and byte-compatible
-  across the Schemars migration.
+- **Dependencies:** Update `clap`, `zbus`, `timeago`, `schemars`, `uuid`,
+  `log`, `futures-util`, and `ureq`, and drop the runtime's unused
+  `thiserror` dependency. Keep the plugin-author and runtime configuration
+  schemas on draft-07 and byte-compatible across the Schemars migration.
 - **Packaging/Nix:** Refresh the pinned `cachix/install-nix-action` v31
   revision.
 
