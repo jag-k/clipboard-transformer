@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog], and this project follows
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+## [0.1.6] - 2026-09-01
+
 ### Added
 
 - **Rule groups:** (#29) Add `groups` and `group_imports` to the configuration, a
@@ -219,7 +221,8 @@ The format is based on [Keep a Changelog], and this project follows
   AUR, and WinGet publishing.
 
 <!-- next-url -->
-[Unreleased]: https://github.com/jag-k/clipboard-transformer/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/jag-k/clipboard-transformer/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/jag-k/clipboard-transformer/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/jag-k/clipboard-transformer/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/jag-k/clipboard-transformer/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/jag-k/clipboard-transformer/compare/v0.1.2...v0.1.3
