@@ -44,7 +44,6 @@ sha2 = "0.10"
 serde_yaml.workspace = true
 shlex = "2.0"
 tempfile.workspace = true
-thiserror = "1.0"
 toml.workspace = true
 ureq.workspace = true
 url.workspace = true
