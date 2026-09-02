@@ -263,6 +263,5 @@ jobs:
         shell: pwsh
         run: |
           .\wingetcreate.exe submit $env:MANIFEST_DIR `
-            --prtitle "Clipboard Transformer $env:VERSION" `
             --token $env:WINGET_CREATE_GITHUB_TOKEN `
             --no-open

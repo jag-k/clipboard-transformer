@@ -291,12 +291,11 @@ CLA.
 
 The official
 [`wingetcreate` CI guidance](https://github.com/microsoft/winget-create)
-documents a classic personal access token with `repo` scope. A fine-grained
-token needs read and write on `Contents`, `Metadata` and `Pull requests` for the
-`winget-pkgs` fork, plus read on this repository's `Contents` for the release
-lookup. Fine-grained tokens only carry write access to repositories owned by the
-selected owner, so if opening the pull request against `microsoft/winget-pkgs`
-is rejected, fall back to a classic token with `public_repo`. Store the token as
+documents a classic personal access token with `repo` scope, and the 0.1.6
+submission confirmed that a classic token is required. A fine-grained token
+carries write access only to repositories owned by the selected owner, so it
+cannot open the pull request against `microsoft/winget-pkgs` no matter which
+permissions it grants on the fork. Store the classic token as
 `WINGET_CREATE_GITHUB_TOKEN`. It is used to create the manifest branch/fork and
 submit a pull request to `microsoft/winget-pkgs`; it does not push to this
 repository.
