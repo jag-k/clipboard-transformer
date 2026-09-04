@@ -45,6 +45,12 @@ logs, generic error serialization, config files, or the Extism variable store.
 Storage should use the native secret store when available, with an explicit
 user-visible fallback policy where it is not.
 
+The same host-owned credential-storage implementation may serve the runtime's
+application-local `secret://os/<name>` provider, as described in
+[`onepassword-integration.md`](onepassword-integration.md). This does not grant
+plugins a generic Keychain API: their records remain scoped to
+`(plugin_id, connection_id)`, distinct from application-local secret records.
+
 ## Lifecycle requirements
 
 - Discover requirements during initialization.
@@ -57,4 +63,5 @@ user-visible fallback policy where it is not.
 - Never make authentication failure a whole-application startup failure.
 
 Before implementation, turn this outline into versioned protocol types and
-tests in `crates/plugin-api`, then update [`plugins/API.md`](../../plugins/API.md).
+tests in `crates/plugin-api`, then update
+[`plugins/API.md`](../../plugins/API.md).

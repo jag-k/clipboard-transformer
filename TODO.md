@@ -15,6 +15,14 @@ release notes rather than this file.
 
 ## Runtime and tooling
 
+- [ ] Add an optional, provider-based secret-resolution boundary. The first
+  increment is complete `op://` resolution in `.env` and authored configuration,
+  configured 1Password Environments, and application-local `secret://os/`
+  references backed by the native credential store. The accepted design leaves
+  room for later Bitwarden Secrets Manager, Infisical, Vault/OpenBao, Consul KV,
+  and AWS Secrets Manager providers; use the
+  [1Password integration plan](.agents/plans/onepassword-integration.md). Do
+  not invoke the `op` CLI or adopt an unofficial Rust SDK.
 - [ ] Add a configuration option to disable automatic config hot reload,
   including filesystem watches and periodic import polling, while keeping
   explicit manual reload available.
@@ -25,6 +33,10 @@ release notes rather than this file.
 
 ## Future work
 
+- [ ] Build a project website with clearer user-facing documentation, examples,
+  downloads, and links to the full configuration and plugin references. Keep
+  the repository README short and GUI-first; the website must not become a
+  second, drifting source of truth for configuration semantics.
 - [ ] Add host-managed plugin authentication in a future Plugin API revision.
   The accepted boundary is summarized in
   `.agents/plans/plugin-authentication.md`.

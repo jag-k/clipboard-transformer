@@ -50,6 +50,8 @@ Potential host-managed authentication is summarized in
 [`../plans/plugin-authentication.md`](../plans/plugin-authentication.md).
 The accepted future direction for rule-group metadata and shared local group
 state is recorded in [`../plans/rule-groups.md`](../plans/rule-groups.md).
+The accepted optional 1Password secret-loading boundary is recorded in
+[`../plans/onepassword-integration.md`](../plans/onepassword-integration.md).
 
 ## Platforms
 
