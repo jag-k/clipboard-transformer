@@ -86,7 +86,7 @@ scoop install clipboard-transformer
 ### WinGet
 
 ```powershell
-winget install --exact --id JagK.ClipboardTransformer
+winget install --id JagK.ClipboardTransformer --exact --source winget --silent
 ```
 
 > [!NOTE]
