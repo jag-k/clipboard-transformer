@@ -85,18 +85,13 @@ scoop install clipboard-transformer
 
 ### WinGet
 
-> [!WARNING]
-> Clipboard Transformer is not in the WinGet community catalog yet. The command
-> below will work only after
-> [microsoft/winget-pkgs#411013](https://github.com/microsoft/winget-pkgs/pull/411013)
-> is merged and the catalog update becomes available.
-
 ```powershell
 winget install --exact --id JagK.ClipboardTransformer
 ```
 
-After the first manifest is accepted, stable release updates are prepared to
-publish automatically.
+> [!NOTE]
+> WinGet can be updated much slower than other methods.
+> If you want to be always up to date, try to use another method like [scoop](#scoop).
 
 ### Direct downloads
 
