@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog], and this project follows
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+### Fixed
+
+- **Dependencies:** Update `rustls` to 0.23.45 for RUSTSEC-2026-0285.
+
 ## [0.1.6] - 2026-09-01
 
 ### Added

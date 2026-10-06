@@ -32,6 +32,15 @@ ignore = [
   # to escape from. Extism 1.30 still pins Wasmtime 43.x; remove this exception
   # as soon as Extism supports a patched Wasmtime release (46.0.3 or newer).
   { id = "RUSTSEC-2026-0269", reason = "Wasmtime filesystem sandbox escape is unreachable because plugins receive no preopened directories; Extism 1.30 has no compatible patched Wasmtime" },
+  # RUSTSEC-2026-0316 (dynamic `Val` record lifting) and RUSTSEC-2026-0327
+  # (component-model-async callback results) are Component Model bugs. Extism
+  # 1.30 loads every plugin and its kernel as core modules with `Module::new`
+  # and never instantiates a component, and this repository does not call
+  # Wasmtime directly. Fixes need Wasmtime 48.0.4+; Extism main already moved to
+  # Wasmtime 48 but has no crates.io release yet, so drop both entries with the
+  # Extism upgrade.
+  { id = "RUSTSEC-2026-0316", reason = "Wasmtime component Val lifting is unreachable: Extism 1.30 runs only core modules; no released Extism supports a patched Wasmtime" },
+  { id = "RUSTSEC-2026-0327", reason = "Wasmtime component-model-async callback bug is unreachable: Extism 1.30 runs only core modules; no released Extism supports a patched Wasmtime" },
   # wasm-compose is reached only through Wasmtime in the Extism plugin runtime.
   # Its persistent data structures use three crates that were archived together.
   # These advisories are informational and none of the crates has a patched
