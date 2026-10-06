@@ -51,6 +51,12 @@ permissions:
 jobs:
   build-flatpak:
     runs-on: ubuntu-24.04
+    # A newer pull-request push cancels the older build, while running main and
+    # release builds are never cancelled. Job level, because releases call this
+    # workflow.
+    concurrency:
+      group: build-flatpak-${{ github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     container:
       image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-25.08
       options: --privileged

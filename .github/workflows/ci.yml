@@ -33,6 +33,50 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Pull requests run macOS and Windows only where they can catch something
+  # Linux cannot: Rust sources and Cargo inputs for the portable jobs, Windows
+  # packaging for the MSI and standalone jobs. Pushes to main, the weekly
+  # schedule, and manual runs always run every job.
+  changes:
+    name: Changed paths
+    runs-on: ubuntu-22.04
+    outputs:
+      os: ${{ steps.paths.outputs.os }}
+      windows-packaging: ${{ steps.paths.outputs.windows-packaging }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - id: paths
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          all='["ubuntu-22.04","macos-14","windows-2025"]'
+          if [[ "${EVENT}" != "pull_request" ]]; then
+            echo "os=${all}" >> "${GITHUB_OUTPUT}"
+            echo "windows-packaging=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          files="$(git diff --name-only "${BASE}...${HEAD}")"
+          changed() { grep -qE "$1" <<<"${files}"; }
+          # Platform code is spread across crates through cfg(target_os), so
+          # any Rust or Cargo change needs the native compilers and tests.
+          if changed '^(crates|apps|tools)/|^Cargo\.(toml|lock)$|^rust-toolchain|^\.cargo/|^Justfile$|^\.github/(workflows/ci\.yml|actions/)'; then
+            echo "os=${all}" >> "${GITHUB_OUTPUT}"
+          else
+            echo 'os=["ubuntu-22.04"]' >> "${GITHUB_OUTPUT}"
+          fi
+          if changed '^package/windows/|^Packager\.toml$|^apps/desktop/|^crates/runtime/src/platform/windows/|^assets/generated/windows/|^\.cargo/|^Justfile$|^\.github/(workflows/ci\.yml|actions/)'; then
+            echo "windows-packaging=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "windows-packaging=false" >> "${GITHUB_OUTPUT}"
+          fi
+
   format:
     name: Format
     runs-on: ubuntu-22.04
@@ -50,22 +94,18 @@ jobs:
         uses: ./.github/actions/install-just
       - run: just check-fmt
 
+  # One job per OS: clippy type-checks everything `check` does, and the tests
+  # reuse the same build. Linux also runs the host-independent checks (the CLI
+  # without default features and the browser WASM crates), so the union over
+  # this workflow still covers every recipe in `just ci`.
   portable:
-    name: ${{ matrix.os }} (${{ matrix.task }})
+    name: ${{ matrix.os }}
+    needs: changes
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        # macOS is the primary development platform, so it is verified on every
-        # push rather than only when a release tag builds its packages.
-        os:
-          - ubuntu-22.04
-          - macos-14
-          - windows-2025
-        task:
-          - check
-          - test
-          - clippy
+        os: ${{ fromJSON(needs.changes.outputs.os) }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -73,31 +113,29 @@ jobs:
       - name: Install Rust
         shell: bash
         env:
-          TASK: ${{ matrix.task }}
+          OS: ${{ matrix.os }}
         run: |
           set -euo pipefail
-          rustup toolchain install stable --profile minimal
+          rustup toolchain install stable --profile minimal --component clippy
           rustup default stable
-          case "${TASK}" in
-            check) rustup target add wasm32-unknown-unknown ;;
-            clippy) rustup component add clippy ;;
-          esac
+          if [[ "${OS}" == ubuntu-* ]]; then
+            rustup target add wasm32-unknown-unknown
+          fi
       - name: Install just
         uses: ./.github/actions/install-just
       - uses: Swatinem/rust-cache@v2
         with:
-          key: ${{ matrix.task }}
+          key: portable
       - name: Verify
         shell: bash
         env:
-          TASK: ${{ matrix.task }}
+          OS: ${{ matrix.os }}
         run: |
           set -euo pipefail
-          case "${TASK}" in
-            check) just check check-cli check-wasm ;;
-            test) just test ;;
-            clippy) just check-clippy check-clippy-cli ;;
-          esac
+          if [[ "${OS}" == ubuntu-* ]]; then
+            just check check-cli check-wasm
+          fi
+          just check-clippy check-clippy-cli test
 
   deny:
     name: Dependency advisories and licenses
@@ -248,6 +286,8 @@ jobs:
 
   windows-standalone:
     name: Windows standalone executable
+    needs: changes
+    if: needs.changes.outputs.windows-packaging == 'true'
     runs-on: windows-2025
     steps:
       - uses: actions/checkout@v6
@@ -273,6 +313,8 @@ jobs:
 
   windows-msi:
     name: Windows MSI
+    needs: changes
+    if: needs.changes.outputs.windows-packaging == 'true'
     runs-on: windows-2025
     steps:
       - uses: actions/checkout@v6

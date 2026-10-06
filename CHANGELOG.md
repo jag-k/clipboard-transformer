@@ -16,6 +16,10 @@ The format is based on [Keep a Changelog], and this project follows
   release links from `CHANGELOG.md` (parsed with mistune) before the Flatpak
   build, so software centers show a changelog for every version. Markdown
   that AppStream cannot express fails the build instead of being flattened.
+- **CI:** Run one check, Clippy, and test job per OS instead of one per task.
+  Pull requests run macOS and Windows only for Rust or Cargo changes, the
+  Windows MSI and standalone jobs only for Windows packaging changes, and Nix
+  only on Linux; pushes to `main`, the weekly run, and releases keep every job.
 
 ### Fixed
 
