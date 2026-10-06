@@ -82,6 +82,15 @@ jobs:
           fi
           echo "VERSION=${version}" >> "${GITHUB_ENV}"
 
+      - name: Generate Flatpak metainfo
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run --script package/flatpak/write-release-notes.py \
+            package/flatpak/dev.jag_k.clipboard_transformer.metainfo.xml \
+            CHANGELOG.md \
+            package/flatpak/generated.metainfo.xml
+
       - name: Build Flatpak bundle
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:

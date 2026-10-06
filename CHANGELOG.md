@@ -13,8 +13,9 @@ The format is based on [Keep a Changelog], and this project follows
 - **Packaging/Flatpak:** Add help and source links, keywords, categories, and
   input-control hints to the AppStream metadata shown by software centers.
 - **Packaging/Flatpak:** Generate AppStream release history with notes and
-  release links from `CHANGELOG.md` during the Flatpak build, so software
-  centers show a changelog for every version.
+  release links from `CHANGELOG.md` (parsed with mistune) before the Flatpak
+  build, so software centers show a changelog for every version. Markdown
+  that AppStream cannot express fails the build instead of being flattened.
 
 ### Fixed
 

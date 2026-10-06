@@ -214,6 +214,14 @@ gen-config-schema:
 gen-flatpak-sources:
     package/flatpak/update-cargo-sources.sh
 
+[doc('Generate the ignored Flatpak metainfo with release notes from CHANGELOG.md')]
+[group('gen')]
+[unix]
+gen-flatpak-metainfo:
+    uv run --script package/flatpak/write-release-notes.py \
+      package/flatpak/{{ flatpak_app_id }}.metainfo.xml CHANGELOG.md \
+      package/flatpak/generated.metainfo.xml
+
 [arg('force', long='force', value='true')]
 [doc('Compile AppIcon.icon into macOS/Linux/Windows icon assets')]
 [group('gen')]
@@ -511,7 +519,7 @@ require-flatpak-builder:
 [doc('Build a local Flatpak bundle (requires the Flathub runtime remote)')]
 [group('linux')]
 [linux]
-package-flatpak: require-flatpak-builder gen-flatpak-sources
+package-flatpak: require-flatpak-builder gen-flatpak-sources gen-flatpak-metainfo
     #!/usr/bin/env bash
     set -euo pipefail
     version="$(sed -nE 's/^version = "([^"]+)"$/\1/p' Cargo.toml | head -n 1)"

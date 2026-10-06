@@ -1,88 +1,126 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.12"
+# dependencies = ["mistune==3.3.4"]
+# ///
 """Write AppStream metainfo with release notes taken from CHANGELOG.md.
 
 The committed metainfo carries only the current `<release>` entry, which
-cargo-release bumps. At build time this script replaces its `<releases>`
-block with every released CHANGELOG section from that version downward, so
-software centers such as KDE Discover can show the full history.
+cargo-release bumps. This script replaces its `<releases>` block with every
+released CHANGELOG section from that version downward, so software centers
+such as KDE Discover can show the full history.
+
+CHANGELOG.md is parsed with mistune and rendered into the markup AppStream
+allows in release descriptions. Constructs AppStream cannot express fail the
+script instead of being flattened silently.
 
 usage: write-release-notes.py METAINFO CHANGELOG OUTPUT
 """
 
-import html
 import re
 import sys
+from html import escape
 from pathlib import Path
 
+import mistune
+
 REPOSITORY = "https://github.com/jag-k/clipboard-transformer"
-SECTION = re.compile(r"^## \[(?P<version>[^\]]+)\] - (?P<date>\d{4}-\d{2}-\d{2})$")
+SECTION = re.compile(
+    r"^\[?(?P<version>\d+\.\d+\.\d+[^\]\s]*)\]? - (?P<date>\d{4}-\d{2}-\d{2})$"
+)
 CURRENT = re.compile(r'<release version="(?P<version>[^"]+)" date="[^"]+" />')
 RELEASES = re.compile(r"^  <releases>\n.*?^  </releases>\n", re.MULTILINE | re.DOTALL)
 
 
-def inline(text: str) -> str:
-    """Convert the inline Markdown used in CHANGELOG.md to AppStream markup."""
-    parts = re.split(r"(`[^`]+`)", text)
+class UnsupportedMarkdown(ValueError):
+    pass
+
+
+def plain(tokens: list[dict]) -> str:
+    """Return the text content of inline tokens."""
     out = []
-    for part in parts:
-        if part.startswith("`") and part.endswith("`") and len(part) > 1:
-            out.append(f"<code>{html.escape(part[1:-1], quote=False)}</code>")
-            continue
-        part = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", part)
-        part = html.escape(part, quote=False)
-        part = re.sub(r"\*\*(.+?)\*\*", r"<em>\1</em>", part)
-        out.append(part)
+    for token in tokens:
+        kind = token["type"]
+        if kind in ("text", "codespan"):
+            out.append(token["raw"])
+        elif kind in ("softbreak", "linebreak"):
+            out.append(" ")
+        elif "children" in token:
+            out.append(plain(token["children"]))
+        else:
+            raise UnsupportedMarkdown(f"inline {kind}")
     return "".join(out)
 
 
+def inline(tokens: list[dict]) -> str:
+    """Render inline tokens as AppStream `<em>`/`<code>` markup."""
+    out = []
+    for token in tokens:
+        kind = token["type"]
+        if kind == "text":
+            out.append(escape(token["raw"], quote=False))
+        elif kind == "codespan":
+            out.append(f"<code>{escape(token['raw'], quote=False)}</code>")
+        elif kind in ("strong", "emphasis"):
+            # AppStream does not nest inline markup.
+            out.append(f"<em>{escape(plain(token['children']), quote=False)}</em>")
+        elif kind == "link":
+            out.append(inline(token["children"]))
+        elif kind in ("softbreak", "linebreak"):
+            out.append(" ")
+        else:
+            raise UnsupportedMarkdown(f"inline {kind}")
+    return "".join(out)
+
+
+def block(token: dict) -> list[str]:
+    """Render one block token of a release section."""
+    kind = token["type"]
+    if kind == "blank_line":
+        return []
+    if kind == "heading" and token["attrs"]["level"] == 3:
+        return [f"<p>{inline(token['children'])}</p>"]
+    if kind == "paragraph":
+        return [f"<p>{inline(token['children'])}</p>"]
+    if kind == "list":
+        tag = "ol" if token["attrs"]["ordered"] else "ul"
+        lines = [f"<{tag}>"]
+        for item in token["children"]:
+            children = [
+                child for child in item["children"] if child["type"] != "blank_line"
+            ]
+            if len(children) != 1 or children[0]["type"] not in (
+                "block_text",
+                "paragraph",
+            ):
+                raise UnsupportedMarkdown("list item with nested blocks")
+            lines.append(f"  <li>{inline(children[0]['children'])}</li>")
+        lines.append(f"</{tag}>")
+        return lines
+    raise UnsupportedMarkdown(kind)
+
+
 def parse(changelog: str) -> list[tuple[str, str, list[str]]]:
-    """Return (version, date, body lines) for every released section."""
+    """Return (version, date, description lines) for every released section."""
+    tokens = mistune.create_markdown(renderer=None)(changelog)
     sections: list[tuple[str, str, list[str]]] = []
     current: list[str] | None = None
-    for line in changelog.splitlines():
-        if line.startswith(("## ", "<!-- next-url -->")):
+    for token in tokens:
+        if token["type"] == "heading" and token["attrs"]["level"] <= 2:
             current = None
-            match = SECTION.match(line)
+            match = SECTION.match(plain(token["children"]))
             if match:
                 current = []
                 sections.append((match["version"], match["date"], current))
+        elif token["type"] == "block_html":
+            current = None
         elif current is not None:
-            current.append(line)
+            try:
+                current.extend(block(token))
+            except UnsupportedMarkdown as error:
+                version = sections[-1][0]
+                raise UnsupportedMarkdown(f"[{version}]: unsupported {error}") from None
     return sections
-
-
-def description(lines: list[str]) -> list[str]:
-    """Render a section body as AppStream `<p>` and `<ul>` blocks."""
-    blocks: list[tuple[str, list[str]]] = []
-    for line in lines:
-        stripped = line.strip()
-        if not stripped:
-            if blocks and blocks[-1][0] == "p":
-                blocks.append(("break", []))
-            continue
-        if stripped.startswith("### "):
-            blocks.append(("p", [stripped[4:]]))
-            blocks.append(("break", []))
-        elif stripped.startswith(("- ", "* ")):
-            if not blocks or blocks[-1][0] != "ul":
-                blocks.append(("ul", []))
-            blocks[-1][1].append(stripped[2:])
-        elif blocks and blocks[-1][0] == "ul" and line.startswith("  "):
-            blocks[-1][1][-1] += " " + stripped
-        elif blocks and blocks[-1][0] == "p":
-            blocks[-1][1][0] += " " + stripped
-        else:
-            blocks.append(("p", [stripped]))
-
-    out: list[str] = []
-    for kind, items in blocks:
-        if kind == "p":
-            out.append(f"<p>{inline(items[0])}</p>")
-        elif kind == "ul":
-            out.append("<ul>")
-            out.extend(f"  <li>{inline(item)}</li>" for item in items)
-            out.append("</ul>")
-    return out
 
 
 def main() -> int:
@@ -98,16 +136,19 @@ def main() -> int:
         return 1
     version = current["version"]
 
-    sections = parse(changelog_path.read_text(encoding="utf-8"))
+    try:
+        sections = parse(changelog_path.read_text(encoding="utf-8"))
+    except UnsupportedMarkdown as error:
+        print(f"{changelog_path}: {error}", file=sys.stderr)
+        return 1
     versions = [section[0] for section in sections]
     if version not in versions:
         print(f"{changelog_path}: no section for {version}", file=sys.stderr)
         return 1
 
     releases = ["  <releases>"]
-    for release, date, body in sections[versions.index(version) :]:
+    for release, date, notes in sections[versions.index(version) :]:
         releases.append(f'    <release version="{release}" date="{date}">')
-        notes = description(body)
         if notes:
             releases.append("      <description>")
             releases.extend(f"        {line}" for line in notes)
