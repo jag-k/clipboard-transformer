@@ -43,6 +43,11 @@
     <binary>clipboard-transformer-app</binary>
   </provides>
   <content_rating type="oars-1.1" />
+  <!--
+    Keep only the current release here; cargo-release bumps it. The Flatpak
+    build replaces this block with the full history and notes from
+    CHANGELOG.md via write-release-notes.py.
+  -->
   <releases>
     <release version="0.1.6" date="2026-09-01" />
   </releases>

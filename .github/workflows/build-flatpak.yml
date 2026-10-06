@@ -10,6 +10,7 @@ on:
       - "crates/**"
       - "Cargo.lock"
       - "Cargo.toml"
+      - "CHANGELOG.md"
       - "package/flatpak/**"
   push:
     branches:
@@ -22,6 +23,7 @@ on:
       - "crates/**"
       - "Cargo.lock"
       - "Cargo.toml"
+      - "CHANGELOG.md"
       - "package/flatpak/**"
   workflow_call:
     inputs:

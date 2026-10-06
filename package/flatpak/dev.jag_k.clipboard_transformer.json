@@ -32,7 +32,7 @@
         "install -Dm0755 target/release/clipboard-transformer ${FLATPAK_DEST}/bin/clipboard-transformer",
         "install -Dm0755 target/release/clipboard-transformer-app ${FLATPAK_DEST}/bin/clipboard-transformer-app",
         "install -Dm0644 package/flatpak/dev.jag_k.clipboard_transformer.desktop ${FLATPAK_DEST}/share/applications/dev.jag_k.clipboard_transformer.desktop",
-        "install -Dm0644 package/flatpak/dev.jag_k.clipboard_transformer.metainfo.xml ${FLATPAK_DEST}/share/metainfo/dev.jag_k.clipboard_transformer.metainfo.xml",
+        "python3 package/flatpak/write-release-notes.py package/flatpak/dev.jag_k.clipboard_transformer.metainfo.xml CHANGELOG.md ${FLATPAK_DEST}/share/metainfo/dev.jag_k.clipboard_transformer.metainfo.xml",
         "install -Dm0644 package/flatpak/dev.jag-k.clipboard-transformer.service ${FLATPAK_DEST}/share/dbus-1/services/dev.jag-k.clipboard-transformer.service",
         "install -Dm0644 assets/generated/linux/app-icon.png ${FLATPAK_DEST}/share/icons/hicolor/256x256/apps/dev.jag_k.clipboard_transformer.png",
         "install -Dm0644 assets/tray.svg ${FLATPAK_DEST}/share/icons/hicolor/scalable/status/clipboard-transformer-symbolic.svg",
