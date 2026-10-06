@@ -8,8 +8,29 @@ The format is based on [Keep a Changelog], and this project follows
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+### Changed
+
+- **Packaging/Flatpak:** Add help and source links, keywords, categories, and
+  input-control hints to the AppStream metadata shown by software centers.
+- **Packaging/Flatpak:** Generate AppStream release history with notes and
+  release links from `CHANGELOG.md` (parsed with mistune) before the Flatpak
+  build, so software centers show a changelog for every version. Markdown
+  that AppStream cannot express fails the build instead of being flattened.
+- **CI:** Run one check, Clippy, and test job per OS instead of one per task.
+  Pull requests run macOS and Windows only for Rust or Cargo changes, the
+  Windows MSI and standalone jobs only for Windows packaging changes, and Nix
+  only on Linux; pushes to `main`, the weekly run, and releases keep every job.
+
 ### Fixed
 
+- **Packaging/Flatpak:** Sign the `appstream` and `appstream2` branches when
+  publishing. They were committed unsigned, so clients rejected the remote
+  AppStream pull and software centers such as KDE Discover showed the branch
+  name (`stable`) instead of the available version. Publication also signs
+  heads that earlier releases left unsigned.
+- **Release:** Write the Flatpak bundle and source archive `.sha256` files
+  with the bare file name, like every other release asset, so
+  `sha256sum --check` works next to the download.
 - **Dependencies:** Update `rustls` to 0.23.45 for RUSTSEC-2026-0285.
 
 ## [0.1.6] - 2026-09-01

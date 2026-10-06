@@ -4,29 +4,39 @@ description: >-
   optionally the macOS Info.plist (macOS runners only).
 inputs:
   version:
-    description: Expected release version
-    required: true
+    description: >-
+      Expected release version. Empty checks the manifests against the
+      Cargo.toml workspace version, as pull-request builds do.
+    required: false
+    default: ""
   info-plist:
     description: >-
       Optional path to a macOS Info.plist whose CFBundleShortVersionString and
       CFBundleVersion must also match. Requires a macOS runner (PlistBuddy).
     required: false
     default: ""
+outputs:
+  version:
+    description: The checked version
+    value: ${{ steps.check.outputs.version }}
 runs:
   using: composite
   steps:
     - name: Check version consistency
+      id: check
       shell: bash
       env:
         EXPECTED_VERSION: ${{ inputs.version }}
         INFO_PLIST: ${{ inputs.info-plist }}
       run: |
         set -euo pipefail
-        version="${EXPECTED_VERSION}"
+        # The first `version` key is [workspace.package], which every crate
+        # inherits. Reading it with sed keeps this usable in jobs without a
+        # Rust toolchain, such as the Flatpak container.
         cargo_version="$(
-          cargo metadata --no-deps --format-version 1 |
-            jq -r '.packages[] | select(.name == "ct-runtime") | .version'
+          sed -nE 's/^version = "([^"]+)"$/\1/p' Cargo.toml | head -n 1
         )"
+        version="${EXPECTED_VERSION:-${cargo_version}}"
         packager_version="$(
           sed -nE 's/^version = "([^"]+)"$/\1/p' Packager.toml
         )"
@@ -56,3 +66,4 @@ runs:
             exit 1
           fi
         fi
+        echo "version=${version}" >> "${GITHUB_OUTPUT}"

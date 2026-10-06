@@ -3,6 +3,7 @@
 /plugins/*/target/
 /plugins.local/
 /package/flatpak/cargo-sources.json
+/package/flatpak/generated.metainfo.xml
 
 # Cargo local configuration and generated package output
 .cargo/.package-cache

@@ -35,19 +35,27 @@ permissions:
 
 jobs:
   build:
+    # Pull requests build Linux only: the two macOS systems would queue behind
+    # every other macOS job for no extra signal over the CI workflow's macOS
+    # build. Pushes to main, releases, and manual runs build all three.
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - runner: ubuntu-24.04
-            system: x86_64-linux
-          - runner: macos-15
-            system: aarch64-darwin
-          # Determinate Nix no longer ships an Intel-host installer. Install
-          # pinned upstream Nix instead and build on GitHub's native Intel host.
-          - runner: macos-15-intel
-            system: x86_64-darwin
-    runs-on: ${{ matrix.runner }}
+        system: >-
+          ${{ fromJSON(github.event_name == 'pull_request'
+          && '["x86_64-linux"]'
+          || '["x86_64-linux", "aarch64-darwin", "x86_64-darwin"]') }}
+    # Determinate Nix no longer ships an Intel-host installer. Install pinned
+    # upstream Nix instead and build x86_64-darwin on GitHub's native Intel host.
+    runs-on: >-
+      ${{ matrix.system == 'x86_64-linux' && 'ubuntu-24.04'
+      || matrix.system == 'aarch64-darwin' && 'macos-15'
+      || 'macos-15-intel' }}
+    # One group per system and ref: a newer pull-request push cancels the older
+    # build, while running main and release builds are never cancelled.
+    concurrency:
+      group: nix-${{ matrix.system }}-${{ github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     steps:
       - uses: actions/checkout@v6
         with:

@@ -102,7 +102,9 @@ $previousMsi = (Resolve-Path .\clipboard-transformer-0.1.0-x86_64.msi).Path
   -PreviousMsiPath $previousMsi
 ```
 
-Omit `-PreviousMsiPath` for a clean-install-only check. The script requests
+From a checkout with a freshly built MSI, `just test-windows-msi` runs the
+same install, upgrade-from-v0.1.0, and uninstall check as CI. Omit
+`-PreviousMsiPath` for a clean-install-only check. The script requests
 elevation when run locally, performs non-interactive install and uninstall, and
 writes verbose logs under `target/msi-verification`. GitHub-hosted Windows
 runners already run as administrators with UAC disabled. A non-elevated
@@ -290,7 +292,10 @@ jq --arg version 9.9.9 --arg url http://example/x.zip --arg sha256 0000 \
 # against a copy of the cask with fake hashes and inspect the diff.
 ```
 
-The shared pieces live in `.github/actions/`: `check-version`,
+The shared pieces live in `.github/actions/`: `check-version` (no Rust
+toolchain needed; an empty version checks against `Cargo.toml`),
+`install-just` (pinned `extractions/setup-just` release binary),
 `install-cargo-packager` (pinned + cached), `fetch-release-sha256`, and
 `commit-manifest`. Their `shell: bash` bodies can be executed locally
-verbatim.
+verbatim. Release `.sha256` sidecars come from `just package-checksums` and
+name only the file.

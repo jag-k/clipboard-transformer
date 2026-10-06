@@ -3,6 +3,8 @@ name: Build Flatpak
 on:
   pull_request:
     paths:
+      - ".github/actions/check-version/**"
+      - ".github/actions/install-just/**"
       - ".github/workflows/build-flatpak.yml"
       - "apps/**"
       - "assets/generated/linux/**"
@@ -10,11 +12,15 @@ on:
       - "crates/**"
       - "Cargo.lock"
       - "Cargo.toml"
+      - "CHANGELOG.md"
+      - "Justfile"
       - "package/flatpak/**"
   push:
     branches:
       - main
     paths:
+      - ".github/actions/check-version/**"
+      - ".github/actions/install-just/**"
       - ".github/workflows/build-flatpak.yml"
       - "apps/**"
       - "assets/generated/linux/**"
@@ -22,6 +28,8 @@ on:
       - "crates/**"
       - "Cargo.lock"
       - "Cargo.toml"
+      - "CHANGELOG.md"
+      - "Justfile"
       - "package/flatpak/**"
   workflow_call:
     inputs:
@@ -43,6 +51,12 @@ permissions:
 jobs:
   build-flatpak:
     runs-on: ubuntu-24.04
+    # A newer pull-request push cancels the older build, while running main and
+    # release builds are never cancelled. Job level, because releases call this
+    # workflow.
+    concurrency:
+      group: build-flatpak-${{ github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     container:
       image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-25.08
       options: --privileged
@@ -54,31 +68,21 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
 
-      - name: Generate Flatpak Cargo sources
-        shell: bash
-        run: package/flatpak/update-cargo-sources.sh
+      # The container has no Rust toolchain; install-just downloads a release
+      # binary and check-version reads the manifests without cargo.
+      - name: Install just
+        uses: ./.github/actions/install-just
 
       - name: Check package version
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo_version="$(
-            sed -nE 's/^version = "([^"]+)"$/\1/p' Cargo.toml | head -n 1
-          )"
-          version="${{ inputs.version }}"
-          version="${version:-$cargo_version}"
-          metainfo_version="$(
-            sed -nE 's/.*<release version="([^"]+)" date="[^"]+".*/\1/p' \
-              package/flatpak/dev.jag_k.clipboard_transformer.metainfo.xml
-          )"
-          if [[ "${version}" == "${cargo_version}" && \
-            "${version}" == "${metainfo_version}" ]]; then
-            :
-          else
-            echo "Release (${version}), Cargo.toml (${cargo_version}), and Flatpak metadata (${metainfo_version}) versions must match" >&2
-            exit 1
-          fi
-          echo "VERSION=${version}" >> "${GITHUB_ENV}"
+        id: version
+        uses: ./.github/actions/check-version
+        with:
+          version: ${{ inputs.version }}
+
+      # flatpak-builder builds offline, so both ignored inputs are generated
+      # before it runs, exactly as `just package-flatpak` does locally.
+      - name: Generate Flatpak inputs
+        run: just gen-flatpak-sources gen-flatpak-metainfo
 
       - name: Build Flatpak bundle
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6
@@ -93,13 +97,14 @@ jobs:
 
       - name: Create checksum
         shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
-          bundle="clipboard-transformer-${VERSION}-x86_64.flatpak"
+          bundle="target/distrib-flatpak/clipboard-transformer-${VERSION}-x86_64.flatpak"
           mkdir -p target/distrib-flatpak
-          mv clipboard-transformer.flatpak "target/distrib-flatpak/${bundle}"
-          sha256sum "target/distrib-flatpak/${bundle}" \
-            > "target/distrib-flatpak/${bundle}.sha256"
+          mv clipboard-transformer.flatpak "${bundle}"
+          just package-checksums "${bundle}"
 
       - name: Attest Flatpak bundle
         uses: actions/attest@v4
