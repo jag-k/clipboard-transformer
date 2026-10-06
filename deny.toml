@@ -15,41 +15,25 @@ targets = [
   "wasm32-unknown-unknown",
   "wasm32-wasip1",
 ]
+# Extism 1.30.0 pins Wasmtime to the 43.x line, and Wasmtime publishes
+# advisories faster than Extism releases. Leave out exactly the Wasmtime build
+# that Extism resolves to, together with the crates only Wasmtime pulls in
+# (Cranelift, wasm-compose and its archived data-structure crates). Extism
+# itself, wasi-common, wiggle, and every shared crate are still checked.
+# The exclusion also skips licenses, bans, and sources for that subtree.
+#
+# The spec must be an exact version: cargo-deny ignores version ranges and
+# partial versions here. Any Wasmtime change (an Extism upgrade or a 43.0.x
+# patch) stops the match and brings the subtree back under every check.
+# Review that release before updating this line, never copy it forward.
+exclude = ["wasmtime@43.0.2"]
 
 [advisories]
 version = 2
 yanked = "deny"
 # Every entry needs a reason and must be re-checked, not inherited forever.
-ignore = [
-  # Wasmtime is reached only through the Extism plugin runtime. Extism 1.30
-  # pins Wasmtime to the vulnerable 43.x line; the advisory is low severity
-  # and its fixes start at 46.0.2, so no compatible Cargo update exists yet.
-  # Keep this as a warning until Extism publishes a compatible Wasmtime upgrade.
-  { id = "RUSTSEC-2026-0222", reason = "low-severity Wasmtime advisory in transitive Extism runtime; no patched Extism-compatible version is available" },
-  # RUSTSEC-2026-0269 is a filesystem sandbox escape for WASI guests that are
-  # granted preopened directories. Clipboard Transformer does not put allowed
-  # paths in the Extism manifest, so plugins receive no filesystem directories
-  # to escape from. Extism 1.30 still pins Wasmtime 43.x; remove this exception
-  # as soon as Extism supports a patched Wasmtime release (46.0.3 or newer).
-  { id = "RUSTSEC-2026-0269", reason = "Wasmtime filesystem sandbox escape is unreachable because plugins receive no preopened directories; Extism 1.30 has no compatible patched Wasmtime" },
-  # RUSTSEC-2026-0316 (dynamic `Val` record lifting) and RUSTSEC-2026-0327
-  # (component-model-async callback results) are Component Model bugs. Extism
-  # 1.30 loads every plugin and its kernel as core modules with `Module::new`
-  # and never instantiates a component, and this repository does not call
-  # Wasmtime directly. Fixes need Wasmtime 48.0.4+; Extism main already moved to
-  # Wasmtime 48 but has no crates.io release yet, so drop both entries with the
-  # Extism upgrade.
-  { id = "RUSTSEC-2026-0316", reason = "Wasmtime component Val lifting is unreachable: Extism 1.30 runs only core modules; no released Extism supports a patched Wasmtime" },
-  { id = "RUSTSEC-2026-0327", reason = "Wasmtime component-model-async callback bug is unreachable: Extism 1.30 runs only core modules; no released Extism supports a patched Wasmtime" },
-  # wasm-compose is reached only through Wasmtime in the Extism plugin runtime.
-  # Its persistent data structures use three crates that were archived together.
-  # These advisories are informational and none of the crates has a patched
-  # release, so no compatible Cargo update can remove them yet. Drop these
-  # entries once Extism/Wasmtime no longer pulls this wasm-compose dependency.
-  { id = "RUSTSEC-2026-0247", reason = "unmaintained bitmaps crate in transitive Extism/Wasmtime wasm-compose dependency; no patched release is available" },
-  { id = "RUSTSEC-2026-0250", reason = "unmaintained im-rc crate in transitive Extism/Wasmtime wasm-compose dependency; no patched release is available" },
-  { id = "RUSTSEC-2026-0251", reason = "unmaintained sized-chunks crate in transitive Extism/Wasmtime wasm-compose dependency; no patched release is available" },
-]
+# Advisories in the pinned Wasmtime build are covered by `graph.exclude` above.
+ignore = []
 
 [licenses]
 version = 2
