@@ -8,8 +8,18 @@ The format is based on [Keep a Changelog], and this project follows
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+### Changed
+
+- **Packaging/Flatpak:** Add help and source links, keywords, categories, and
+  input-control hints to the AppStream metadata shown by software centers.
+
 ### Fixed
 
+- **Packaging/Flatpak:** Sign the `appstream` and `appstream2` branches when
+  publishing. They were committed unsigned, so clients rejected the remote
+  AppStream pull and software centers such as KDE Discover showed the branch
+  name (`stable`) instead of the available version. Publication also signs
+  heads that earlier releases left unsigned.
 - **Dependencies:** Update `rustls` to 0.23.45 for RUSTSEC-2026-0285.
 
 ## [0.1.6] - 2026-09-01
