@@ -1,5 +1,17 @@
 version: 2
 
+# Grouping rules, shared by both Cargo entries below:
+#
+# - Dependabot classifies updates by plain SemVer, so a pre-1.0 bump such as
+#   resvg 0.47 -> 0.48 counts as "minor" even though Cargo treats it as
+#   breaking. Most direct dependencies are still 0.x, so the catch-all group
+#   takes only patch updates, which Cargo always treats as compatible. Minor
+#   and major updates arrive as one PR per crate and need a real review.
+# - A crate goes to the first group it matches, so the families that must move
+#   together come before the catch-all and keep their minor updates.
+# - The cooldown skips releases younger than a week; security updates ignore
+#   it and still arrive immediately.
+
 updates:
   # The Cargo workspace. `plugins/gitlab-link` is deliberately not a workspace
   # member, so it needs its own entry below.
@@ -8,6 +20,8 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
     groups:
       # Patch and minor bumps of the wasmtime/Extism stack arrive together and
       # are meaningless to review one crate at a time.
@@ -22,12 +36,14 @@ updates:
         update-types:
           - minor
           - patch
-      # Native platform bindings, same reasoning.
+      # Native platform bindings, same reasoning. Minor bumps of these 0.x
+      # crates are breaking and must be reviewed as one change.
       platform-bindings:
         patterns:
           - objc2
           - objc2-*
-          - windows-sys
+          - block2
+          - windows
           - windows-*
           - x11rb*
           - wayland-*
@@ -35,16 +51,36 @@ updates:
         update-types:
           - minor
           - patch
+      cargo-patch:
+        patterns:
+          - "*"
+        update-types:
+          - patch
 
   - package-ecosystem: cargo
     directory: /plugins/gitlab-link
     schedule:
       interval: monthly
     open-pull-requests-limit: 2
+    cooldown:
+      default-days: 7
+    groups:
+      cargo-patch:
+        patterns:
+          - "*"
+        update-types:
+          - patch
 
   # Keeps the action pins in .github/workflows and .github/actions current.
+  # Actions are pinned by tag or SHA and reviewed together in one PR.
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns:
+          - "*"
