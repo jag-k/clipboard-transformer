@@ -375,7 +375,12 @@ jobs:
             --format=tar \
             --prefix="clipboard-transformer-${VERSION}/" \
             "${GITHUB_SHA}" | gzip -n >"${archive}"
-          sha256sum "${archive}" >"${archive}.sha256"
+          # Name only the file, like `just package-checksums`, so
+          # `sha256sum --check` works next to the download.
+          (
+            cd artifacts
+            sha256sum "${archive##*/}" >"${archive##*/}.sha256"
+          )
           cp LICENSE artifacts/LICENSE
 
       - name: Create GitHub Release

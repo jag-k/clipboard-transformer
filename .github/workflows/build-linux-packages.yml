@@ -138,12 +138,7 @@ jobs:
             find target/distrib -maxdepth 1 -type f -print >&2
             exit 1
           fi
-          (
-            cd target/distrib
-            for artifact in *; do
-              sha256sum "${artifact}" > "${artifact}.sha256"
-            done
-          )
+          just package-checksums target/distrib/*
 
       - name: Attest release artifacts
         uses: actions/attest@v4

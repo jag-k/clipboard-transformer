@@ -4,10 +4,13 @@ name: CI
 # and this workflow cannot drift apart. The recipes are in the `check`, `test`,
 # and `build` groups of the root Justfile.
 #
-# Swatinem/rust-cache is the only third-party action in the repository. It is
-# confined to this workflow, which holds no credentials and grants only
-# `contents: read`; the release workflows stay on official and local actions and
-# build from a clean target directory.
+# Release workflows use only local actions, actions reviewed in full, and
+# official or semi-official ones: published by GitHub, by the tool's vendor
+# (astral-sh/setup-uv), or recommended by the tool's own documentation
+# (extractions/setup-just, behind .github/actions/install-just).
+# Swatinem/rust-cache meets none of these, so it is confined to this
+# workflow, which holds no credentials and grants only `contents: read`; the
+# release workflows build from a clean target directory.
 
 on:
   pull_request:
@@ -291,17 +294,7 @@ jobs:
       - name: Build MSI
         run: just package-windows-msi
       - name: Verify MSI install and uninstall
-        shell: pwsh
-        run: |
-          $msi = Get-ChildItem target/packager/*.msi | Select-Object -First 1
-          if (-not $msi) { throw "cargo-packager did not produce an MSI" }
-          $previousMsi = "target/clipboard-transformer-0.1.0-baseline.msi"
-          Invoke-WebRequest `
-            -Uri "https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.0/clipboard-transformer-0.1.0-x86_64.msi" `
-            -OutFile $previousMsi
-          ./package/windows/verify-msi.ps1 `
-            -MsiPath $msi.FullName `
-            -PreviousMsiPath $previousMsi
+        run: just --yes test-windows-msi
       - name: Upload MSI verification logs
         if: always()
         uses: actions/upload-artifact@v7

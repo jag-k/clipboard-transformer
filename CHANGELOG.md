@@ -24,6 +24,9 @@ The format is based on [Keep a Changelog], and this project follows
   AppStream pull and software centers such as KDE Discover showed the branch
   name (`stable`) instead of the available version. Publication also signs
   heads that earlier releases left unsigned.
+- **Release:** Write the Flatpak bundle and source archive `.sha256` files
+  with the bare file name, like every other release asset, so
+  `sha256sum --check` works next to the download.
 - **Dependencies:** Update `rustls` to 0.23.45 for RUSTSEC-2026-0285.
 
 ## [0.1.6] - 2026-09-01

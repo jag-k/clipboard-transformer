@@ -309,19 +309,11 @@ jobs:
           xcrun stapler validate "${app}"
           xcrun stapler validate "${staged_dmg}"
 
-          for artifact in \
+          just package-checksums \
             "${app_zip}" \
             "${staged_dmg}" \
             "${homebrew_zip}" \
             "${cli_archive}"
-          do
-            # Record the bare artifact name so users can run `shasum -c`
-            # next to the downloaded file (the Windows job does the same).
-            (
-              cd "$(dirname "${artifact}")" &&
-                shasum -a 256 "$(basename "${artifact}")" > "$(basename "${artifact}").sha256"
-            )
-          done
 
       - name: Remove signing keychain
         if: always()

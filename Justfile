@@ -271,6 +271,23 @@ build-release:
 build-example-plugin:
     cargo build --manifest-path plugins/gitlab-link/Cargo.toml --target wasm32-wasip1 --release
 
+# Release workflows call this for every staged asset. The sidecar names only
+# the file, so `sha256sum --check` works next to a download (docs/install.md).
+[doc('Write a bare-name .sha256 sidecar next to each file')]
+[group('build')]
+[positional-arguments]
+[unix]
+package-checksums +files:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for file in "$@"; do
+      (
+        cd "$(dirname "$file")"
+        name="$(basename "$file")"
+        shasum -a 256 "$name" > "$name.sha256"
+      )
+    done
+
 # Local CLI helpers ---------------------------------------------------------------
 
 [doc('Run `clipboard-transformer doctor`')]
@@ -574,6 +591,27 @@ build-windows-standalone:
 package-windows-msi: prepare-package-windows require-packager
     cargo-packager --config Packager.toml --formats wix
     Write-Output "target/packager"
+
+# Installs the latest MSI under target/packager, upgrades over the v0.1.0
+# release, and uninstalls; needs an elevated session. CI runs it with --yes
+# after `just package-windows-msi`.
+[confirm('Install, upgrade, and uninstall the MSI on this machine?')]
+[doc('Exercise MSI install, upgrade, and uninstall on this machine')]
+[extension('.ps1')]
+[group('windows')]
+[script('pwsh', '-NoLogo', '-NoProfile', '-File')]
+[windows]
+test-windows-msi:
+    $ErrorActionPreference = "Stop"
+    $msi = Get-ChildItem target/packager/*.msi | Select-Object -First 1
+    if (-not $msi) { throw "cargo-packager did not produce an MSI" }
+    $previousMsi = "target/clipboard-transformer-0.1.0-baseline.msi"
+    Invoke-WebRequest `
+      -Uri "https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.0/clipboard-transformer-0.1.0-x86_64.msi" `
+      -OutFile $previousMsi
+    ./package/windows/verify-msi.ps1 `
+      -MsiPath $msi.FullName `
+      -PreviousMsiPath $previousMsi
 
 [confirm('Build and install the Clipboard Transformer MSI?')]
 [doc('Build and install the Windows MSI into Program Files')]
