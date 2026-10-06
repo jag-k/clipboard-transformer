@@ -28,7 +28,7 @@ ct-notifications = { workspace = true, features = ["native"], optional = true }
 ct-i18n.workspace = true
 ct-plugin-api.workspace = true
 ct-tray = { workspace = true, features = ["native"], optional = true }
-directories = "5.0"
+directories = "6.0"
 dotenvy = "0.15.7"
 extism = "1.30"
 extism-manifest = "1.30"
