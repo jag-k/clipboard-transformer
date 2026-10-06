@@ -26,13 +26,13 @@ jobs:
           fi
 
       - name: Checkout source
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           path: source
           persist-credentials: false
 
       - name: Checkout Homebrew tap
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: jag-k/homebrew-tap
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}

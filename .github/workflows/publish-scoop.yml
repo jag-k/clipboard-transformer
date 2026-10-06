@@ -26,13 +26,13 @@ jobs:
           fi
 
       - name: Checkout source
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           path: source
           persist-credentials: false
 
       - name: Checkout Scoop bucket
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: jag-k/scoop-bucket
           token: ${{ secrets.SCOOP_BUCKET_TOKEN }}
