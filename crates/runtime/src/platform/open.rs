@@ -10,6 +10,12 @@ pub fn open_rule_in_editor(
     line: Option<usize>,
     configured_editor: Option<&EditorConfig>,
 ) -> Result<()> {
+    // Host editors do not exist inside the Flatpak sandbox, so the portal opens
+    // the file in the user's default application, without the line number.
+    #[cfg(target_os = "linux")]
+    if crate::platform::environment::running_in_flatpak() {
+        return super::linux::open::open_file(path);
+    }
     if let Some(editor) = configured_editor.filter(|editor| !editor.command.trim().is_empty()) {
         return open_with_configured_editor(editor, path, line);
     }
@@ -103,6 +109,10 @@ fn open_with_configured_editor(
 }
 
 pub fn open_config(path: &Path) -> Result<()> {
+    #[cfg(target_os = "linux")]
+    if crate::platform::environment::running_in_flatpak() {
+        return super::linux::open::open_file(path);
+    }
     #[cfg(target_os = "macos")]
     let mut command = Command::new("/usr/bin/open");
     #[cfg(target_os = "windows")]
@@ -128,6 +138,10 @@ pub fn open_config(path: &Path) -> Result<()> {
 }
 
 pub fn reveal_config(path: &Path) -> Result<()> {
+    #[cfg(target_os = "linux")]
+    if crate::platform::environment::running_in_flatpak() {
+        return super::linux::open::reveal(path);
+    }
     #[cfg(target_os = "macos")]
     let mut command = {
         let mut command = Command::new("/usr/bin/open");

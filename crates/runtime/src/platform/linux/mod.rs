@@ -4,6 +4,8 @@ pub mod diagnostics;
 #[cfg(feature = "desktop")]
 #[path = "../unix_instance.rs"]
 pub mod instance;
+#[cfg(feature = "desktop")]
+pub mod open;
 
 #[cfg(feature = "desktop")]
 use anyhow::Result;

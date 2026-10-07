@@ -42,6 +42,11 @@ The format is based on [Keep a Changelog], and this project follows
   AppStream pull and software centers such as KDE Discover showed the branch
   name (`stable`) instead of the available version. Publication also signs
   heads that earlier releases left unsigned.
+- **Linux/Flatpak:** Open the config, rules, and their folder from the tray
+  through the OpenURI portal. Host editors from `$EDITOR` or `editor.command`
+  do not exist in the sandbox, and the runtime's `xdg-open` shared files
+  read-only, so sandboxed editors could not save them; folders are now shown
+  with the file selected.
 - **Linux/Tray:** Name the symbolic tray icon
   `dev.jagk.clipboard_transformer-symbolic` in every Linux package. Flatpak
   exports only app-ID-prefixed icons, so the sandboxed tray icon previously
