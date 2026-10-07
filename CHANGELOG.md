@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog], and this project follows
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+## [0.1.7] - 2026-10-07
+
 ### Changed
 
 - **Plugins:** Rename the example GitLab plugin to `dev.jagk.gitlab`. Rename
@@ -272,7 +274,8 @@ The format is based on [Keep a Changelog], and this project follows
   AUR, and WinGet publishing.
 
 <!-- next-url -->
-[Unreleased]: https://github.com/jag-k/clipboard-transformer/compare/v0.1.6...HEAD
+[Unreleased]: https://github.com/jag-k/clipboard-transformer/compare/v0.1.7...HEAD
+[0.1.7]: https://github.com/jag-k/clipboard-transformer/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/jag-k/clipboard-transformer/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/jag-k/clipboard-transformer/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/jag-k/clipboard-transformer/compare/v0.1.3...v0.1.4

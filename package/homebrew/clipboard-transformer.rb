@@ -4,7 +4,7 @@
 cask "clipboard-transformer" do
   arch arm: "aarch64", intel: "x86_64"
 
-  version "0.1.6"
+  version "0.1.7"
 
   name "Clipboard Transformer"
   desc "Rule-based clipboard transformer"

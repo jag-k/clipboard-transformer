@@ -59,6 +59,6 @@
     history and notes from CHANGELOG.md; the Flatpak installs that copy.
   -->
   <releases>
-    <release version="0.1.6" date="2026-09-01" />
+    <release version="0.1.7" date="2026-10-07" />
   </releases>
 </component>
