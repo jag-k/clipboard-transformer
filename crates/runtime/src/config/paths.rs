@@ -1,4 +1,5 @@
 use std::env;
+use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -17,13 +18,10 @@ pub struct ConfigPaths {
 
 impl ConfigPaths {
     pub fn resolve() -> Result<Self> {
-        // Per the XDG spec, empty environment values must be treated as unset.
-        let config_dir = env::var_os("XDG_CONFIG_HOME")
-            .filter(|value| !value.is_empty())
-            .map(PathBuf::from)
-            .map(|path| path.join("clipboard-transformer"))
+        let config_dir = config_dir_from(|name| env::var_os(name))
             .or_else(platform_config_dir)
             .ok_or_else(|| anyhow!("could not resolve config directory"))?;
+        // Per the XDG spec, empty environment values must be treated as unset.
         let state_dir = env::var_os("XDG_STATE_HOME")
             .filter(|value| !value.is_empty())
             .map(PathBuf::from)
@@ -98,6 +96,46 @@ fn short_path_with_aliases(path: &Path, aliases: &[(PathBuf, String)]) -> String
         .unwrap_or(original)
 }
 
+const APP_DIR: &str = "clipboard-transformer";
+
+/// Resolves the configuration directory from the XDG environment, or `None`
+/// to fall back to the platform default.
+///
+/// Inside Flatpak, `XDG_CONFIG_HOME` points into the per-app sandbox, which is
+/// the default. A user who shares the host directory with
+/// `flatpak override --filesystem=xdg-config/clipboard-transformer:create`
+/// makes it visible inside the sandbox; it is then used, resolved through the
+/// host's `HOST_XDG_CONFIG_HOME` or the XDG default below the shared home.
+/// Until the shared directory holds a configuration of its own, an existing
+/// sandbox configuration keeps being used, so granting access loses nothing.
+fn config_dir_from(var: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
+    // Per the XDG spec, empty environment values must be treated as unset.
+    let path = |name: &str| {
+        var(name)
+            .filter(|value| !value.is_empty())
+            .map(PathBuf::from)
+    };
+    let sandboxed = path("XDG_CONFIG_HOME").map(|dir| dir.join(APP_DIR));
+    if path("FLATPAK_ID").is_none() {
+        return sandboxed;
+    }
+    let host = path("HOST_XDG_CONFIG_HOME")
+        .or_else(|| path("HOME").map(|home| home.join(".config")))
+        .map(|dir| dir.join(APP_DIR));
+    match (host.filter(|host| host.is_dir()), sandboxed) {
+        (Some(host), Some(sandboxed)) if !has_config(&host) && has_config(&sandboxed) => {
+            Some(sandboxed)
+        }
+        (shared, sandboxed) => shared.or(sandboxed),
+    }
+}
+
+fn has_config(dir: &Path) -> bool {
+    ["config.yaml", "config.toml"]
+        .iter()
+        .any(|name| dir.join(name).is_file())
+}
+
 fn project_dirs() -> Option<ProjectDirs> {
     ProjectDirs::from("dev", "jag-k", "clipboard-transformer")
 }
@@ -149,6 +187,98 @@ mod tests {
         paths.ensure_plugins_dir().unwrap();
 
         assert!(paths.plugins_dir.is_dir());
+    }
+
+    fn env<'a>(vars: &'a [(&str, &Path)]) -> impl Fn(&str) -> Option<OsString> + 'a {
+        move |name| {
+            vars.iter()
+                .find(|(key, _)| *key == name)
+                .map(|(_, value)| value.as_os_str().to_os_string())
+        }
+    }
+
+    #[test]
+    fn config_dir_uses_xdg_config_home_outside_flatpak() {
+        let config = Path::new("/home/user/.config");
+        assert_eq!(
+            config_dir_from(env(&[("XDG_CONFIG_HOME", config)])),
+            Some(config.join(APP_DIR))
+        );
+        assert_eq!(config_dir_from(env(&[])), None);
+        assert_eq!(
+            config_dir_from(env(&[("XDG_CONFIG_HOME", Path::new(""))])),
+            None
+        );
+    }
+
+    #[test]
+    fn flatpak_config_dir_stays_in_the_sandbox_without_shared_access() {
+        let root = tempfile::tempdir().unwrap();
+        let host = root.path().join("host-config");
+        let sandbox = root.path().join("sandbox-config");
+        let vars = [
+            ("FLATPAK_ID", Path::new("dev.jagk.clipboard_transformer")),
+            ("HOST_XDG_CONFIG_HOME", host.as_path()),
+            ("XDG_CONFIG_HOME", sandbox.as_path()),
+            ("HOME", root.path()),
+        ];
+
+        // Without the override the host directory is not mounted at all.
+        assert_eq!(config_dir_from(env(&vars)), Some(sandbox.join(APP_DIR)));
+    }
+
+    #[test]
+    fn flatpak_config_dir_prefers_the_shared_host_xdg_config_home() {
+        let root = tempfile::tempdir().unwrap();
+        let host = root.path().join("host-config");
+        let sandbox = root.path().join("sandbox-config");
+        fs::create_dir_all(host.join(APP_DIR)).unwrap();
+        let vars = [
+            ("FLATPAK_ID", Path::new("dev.jagk.clipboard_transformer")),
+            ("HOST_XDG_CONFIG_HOME", host.as_path()),
+            ("XDG_CONFIG_HOME", sandbox.as_path()),
+            ("HOME", root.path()),
+        ];
+
+        assert_eq!(config_dir_from(env(&vars)), Some(host.join(APP_DIR)));
+    }
+
+    #[test]
+    fn flatpak_config_dir_falls_back_to_the_shared_host_home() {
+        let root = tempfile::tempdir().unwrap();
+        let sandbox = root.path().join("sandbox-config");
+        fs::create_dir_all(root.path().join(".config").join(APP_DIR)).unwrap();
+        let vars = [
+            ("FLATPAK_ID", Path::new("dev.jagk.clipboard_transformer")),
+            ("XDG_CONFIG_HOME", sandbox.as_path()),
+            ("HOME", root.path()),
+        ];
+
+        assert_eq!(
+            config_dir_from(env(&vars)),
+            Some(root.path().join(".config").join(APP_DIR))
+        );
+    }
+
+    #[test]
+    fn flatpak_config_dir_keeps_the_sandbox_config_until_the_shared_one_exists() {
+        let root = tempfile::tempdir().unwrap();
+        let host = root.path().join("host-config");
+        let sandbox = root.path().join("sandbox-config");
+        let vars = [
+            ("FLATPAK_ID", Path::new("dev.jagk.clipboard_transformer")),
+            ("HOST_XDG_CONFIG_HOME", host.as_path()),
+            ("XDG_CONFIG_HOME", sandbox.as_path()),
+        ];
+        fs::create_dir_all(sandbox.join(APP_DIR)).unwrap();
+        fs::write(sandbox.join(APP_DIR).join("config.toml"), "").unwrap();
+        // `:create` makes Flatpak create the shared directory before start.
+        fs::create_dir_all(host.join(APP_DIR)).unwrap();
+
+        assert_eq!(config_dir_from(env(&vars)), Some(sandbox.join(APP_DIR)));
+
+        fs::write(host.join(APP_DIR).join("config.yaml"), "").unwrap();
+        assert_eq!(config_dir_from(env(&vars)), Some(host.join(APP_DIR)));
     }
 
     #[test]

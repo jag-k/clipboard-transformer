@@ -175,11 +175,10 @@ flatpak install --user \
 Updates then arrive through the normal `flatpak update` flow. Until that URL
 is published, use a release bundle from the direct-download section below.
 
-The Flatpak contains the desktop app and a sandboxed CLI. Configuration is
-stored below `~/.var/app/dev.jagk.clipboard_transformer/config/`. Host
-executables and arbitrary host files are not visible to `shell` rules, and
-in-app autostart is disabled. URL imports and plugin downloads remain available
-through the sandbox's network permission.
+The Flatpak contains the desktop app and a sandboxed CLI. Its configuration,
+state, and cache live below `~/.var/app/dev.jagk.clipboard_transformer/`, and
+it has no access to other host files. In-app autostart is disabled; URL imports
+and plugin HTTP requests work through the sandbox's network permission.
 
 Launch the desktop application normally:
 
@@ -196,6 +195,49 @@ flatpak run --command=clipboard-transformer \
 flatpak run --command=clipboard-transformer \
   dev.jagk.clipboard_transformer doctor
 ```
+
+#### Sandbox limits and workarounds
+
+The commands below change the sandbox for your user only. [Flatseal] shows the
+same permissions in a GUI, and
+`flatpak override --user --reset dev.jagk.clipboard_transformer` undoes them.
+
+**Share the configuration with a native install.** Grant the one host
+directory, then move the existing files there:
+
+```sh
+flatpak override --user \
+  --filesystem=xdg-config/clipboard-transformer:create \
+  dev.jagk.clipboard_transformer
+mv ~/.var/app/dev.jagk.clipboard_transformer/config/clipboard-transformer/* \
+  ~/.config/clipboard-transformer/
+```
+
+The app uses the shared directory once it can see it; until that directory has
+its own `config.yaml` or `config.toml`, the sandbox configuration stays active.
+A native install runs the `shell` rules and loads the plugins it finds there
+without a sandbox, so anything the Flatpak writes to that directory is no
+longer contained.
+
+**Environment variables and plugin tokens.** Shell startup files such as
+`~/.profile` or `~/.zshrc` are not visible, so variables exported only there
+do not reach the app or `env_expansion`. Put them in the `.env` file beside the
+configuration, set them for the whole session in
+`~/.config/environment.d/*.conf`, or pass them to the sandbox:
+
+```sh
+flatpak override --user --env=GITLAB_TOKEN=... dev.jagk.clipboard_transformer
+```
+
+**`shell` rules.** Commands run inside the sandbox with the tools of the
+Freedesktop runtime (`sh`, `bash`, coreutils, `sed`, `grep`, and similar).
+Programs installed on the host, including `uv`, host interpreters, and anything
+in `~/.local/bin`, are not available. Granting file access, for example
+`--filesystem=home`, makes scripts and data readable but still cannot run host
+programs. For rules that need host tools, use a native package from the
+sections below.
+
+[Flatseal]: https://flathub.org/apps/com.github.tchx84.Flatseal
 
 ### Nix on Linux
 

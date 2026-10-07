@@ -22,6 +22,10 @@ The format is based on [Keep a Changelog], and this project follows
   so `flatpak update` offers existing installations the new ID and migrates
   their sandbox data. Notification activation now owns the app ID instead of a
   separate `--own-name` bus name.
+- **Packaging/Flatpak:** Use the host `~/.config/clipboard-transformer/` when
+  the user shares it with `flatpak override`, resolved through
+  `HOST_XDG_CONFIG_HOME`; the sandbox configuration stays active until the
+  shared directory has one. Document the sandbox limits and their workarounds.
 - **Packaging/Flatpak:** Generate AppStream release history with notes and
   release links from `CHANGELOG.md` (parsed with mistune) before the Flatpak
   build, so software centers show a changelog for every version. Markdown

@@ -52,6 +52,11 @@ are:
 | Linux | `~/.config/clipboard-transformer/` | `~/.local/state/clipboard-transformer/` | `~/.cache/clipboard-transformer/` |
 | Windows | `%APPDATA%\jag-k\clipboard-transformer\config\` | `%LOCALAPPDATA%\jag-k\clipboard-transformer\data\state\` | `%LOCALAPPDATA%\jag-k\clipboard-transformer\cache\` |
 
+In the Flatpak, all three directories live below
+`~/.var/app/dev.jagk.clipboard_transformer/` by default. Sharing the
+configuration directory with a native install is opt-in; see
+[Flatpak sandbox limits](install.md#sandbox-limits-and-workarounds).
+
 The active file set is:
 
 | Path | Purpose |

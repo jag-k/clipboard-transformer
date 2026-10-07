@@ -21,6 +21,13 @@ Fallbacks:
 | Linux | `~/.config/clipboard-transformer/` | `~/.local/state/clipboard-transformer/` | `~/.cache/clipboard-transformer/` |
 | Windows | `%APPDATA%\jag-k\clipboard-transformer\config\` | `%LOCALAPPDATA%\jag-k\clipboard-transformer\data\state\` | `%LOCALAPPDATA%\jag-k\clipboard-transformer\cache\` |
 
+Flatpak: config, state, and cache default to the sandbox's XDG directories
+below `~/.var/app/dev.jagk.clipboard_transformer/`. After
+`flatpak override --user --filesystem=xdg-config/clipboard-transformer:create`,
+the host `${HOST_XDG_CONFIG_HOME:-~/.config}/clipboard-transformer/` is used
+once it holds `config.yaml` or `config.toml`; until then the sandbox config
+stays active. State and cache always stay in the sandbox.
+
 Check `<config_dir>/config.yaml`, then `config.toml`. Derived locations:
 
 - generated schema: `<config_dir>/clipboard-transformer.schema.json`;
