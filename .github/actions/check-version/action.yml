@@ -45,7 +45,7 @@ runs:
         )"
         flatpak_version="$(
           sed -nE 's/.*<release version="([^"]+)" date="[^"]+".*/\1/p' \
-            package/flatpak/dev.jag_k.clipboard_transformer.metainfo.xml
+            package/flatpak/dev.jagk.clipboard_transformer.metainfo.xml
         )"
         if [[ "${version}" != "${cargo_version}" \
           || "${version}" != "${packager_version}" \

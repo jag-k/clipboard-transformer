@@ -930,7 +930,7 @@ mod platform_tests {
         assert!(!identifies_flatpak(None));
         assert!(!identifies_flatpak(Some(OsStr::new(""))));
         assert!(identifies_flatpak(Some(OsStr::new(
-            "dev.jag_k.clipboard_transformer"
+            "dev.jagk.clipboard_transformer"
         ))));
     }
 }

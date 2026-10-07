@@ -24,7 +24,7 @@ mkdir -p "${output_directory}/icons"
 # Software centers show this icon while installing from the .flatpakref,
 # before the app's own AppStream data is available.
 install -m0644 "${root}/assets/generated/linux/app-icon.png" \
-  "${output_directory}/icons/dev.jag_k.clipboard_transformer.png"
+  "${output_directory}/icons/dev.jagk.clipboard_transformer.png"
 
 printf '%s\n' \
   '[Flatpak Repo]' \
@@ -38,12 +38,12 @@ printf '%s\n' \
 
 printf '%s\n' \
   '[Flatpak Ref]' \
-  'Name=dev.jag_k.clipboard_transformer' \
+  'Name=dev.jagk.clipboard_transformer' \
   'Branch=stable' \
   'Title=Clipboard Transformer' \
   'Comment=Transform clipboard content with configurable rules' \
   'Homepage=https://github.com/jag-k/clipboard-transformer' \
-  "Icon=${repository_url}icons/dev.jag_k.clipboard_transformer.png" \
+  "Icon=${repository_url}icons/dev.jagk.clipboard_transformer.png" \
   "Url=${repository_url}repo/" \
   'RuntimeRepo=https://flathub.org/repo/flathub.flatpakrepo' \
   'IsRuntime=false' \

@@ -90,7 +90,7 @@ jobs:
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           bundle: clipboard-transformer.flatpak
-          manifest-path: package/flatpak/dev.jag_k.clipboard_transformer.json
+          manifest-path: package/flatpak/dev.jagk.clipboard_transformer.json
           cache-key: flatpak-builder-${{ hashFiles('Cargo.lock', 'package/flatpak/**') }}
           branch: stable
           repository-name: flathub

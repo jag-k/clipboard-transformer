@@ -24,7 +24,7 @@ impl ksni::Tray for LinuxTrayState {
     }
 
     fn icon_name(&self) -> String {
-        "clipboard-transformer-symbolic".into()
+        "dev.jagk.clipboard_transformer-symbolic".into()
     }
 
     fn icon_theme_path(&self) -> String {

@@ -35,7 +35,9 @@ jobs:
       image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-25.08
       options: --privileged
     env:
-      APP_ID: dev.jag_k.clipboard_transformer
+      APP_ID: dev.jagk.clipboard_transformer
+      # The ID earlier releases were published under; see the end-of-life step.
+      LEGACY_APP_ID: dev.jag_k.clipboard_transformer
       FLATPAK_GPG_KEY_ID: ${{ secrets.FLATPAK_GPG_KEY_ID }}
       FLATPAK_GPG_PRIVATE_KEY: ${{ secrets.FLATPAK_GPG_PRIVATE_KEY }}
       FLATPAK_REPOSITORY_TOKEN: ${{ secrets.FLATPAK_REPOSITORY_TOKEN }}
@@ -136,6 +138,25 @@ jobs:
             --gpg-homedir="${GPG_HOME}" \
             --gpg-sign="${FLATPAK_GPG_KEY_ID}" \
             "${repository}" "${bundle}"
+          # End-of-life the legacy ID once, rebased onto the current one, so
+          # `flatpak update` offers installed copies the rename and migrates
+          # their ~/.var/app data. The rebase target must already be in the
+          # repository, hence after the import; the commit marker makes later
+          # publishes skip this.
+          legacy_ref="app/${LEGACY_APP_ID}/x86_64/stable"
+          if ostree rev-parse --repo="${repository}" "${legacy_ref}" \
+            > /dev/null 2>&1 \
+            && ! ostree show --repo="${repository}" \
+              --print-metadata-key=ostree.endoflife-rebase "${legacy_ref}" \
+              > /dev/null 2>&1; then
+            flatpak build-commit-from \
+              --end-of-life="Renamed to ${APP_ID}" \
+              --end-of-life-rebase="${LEGACY_APP_ID}=${APP_ID}" \
+              --gpg-homedir="${GPG_HOME}" \
+              --gpg-sign="${FLATPAK_GPG_KEY_ID}" \
+              --src-ref="${legacy_ref}" \
+              "${repository}" "${legacy_ref}"
+          fi
           # Sign any published head that still lacks this key's signature,
           # including appstream commits left unsigned by earlier releases.
           # `ostree gpg-sign` appends duplicates, so check the key ID first.

@@ -158,8 +158,12 @@ Transformer with:
 ```sh
 flatpak remote-add --user --if-not-exists jag-k \
   https://flatpak.jag-k.dev/jag-k.flatpakrepo
-flatpak install --user jag-k dev.jag_k.clipboard_transformer
+flatpak install --user jag-k dev.jagk.clipboard_transformer
 ```
+
+Earlier releases were published as `dev.jag_k.clipboard_transformer`.
+`flatpak update` offers those installations the new ID and moves their sandbox
+data along.
 
 The application-specific `.flatpakref` performs both operations in one step:
 
@@ -172,7 +176,7 @@ Updates then arrive through the normal `flatpak update` flow. Until that URL
 is published, use a release bundle from the direct-download section below.
 
 The Flatpak contains the desktop app and a sandboxed CLI. Configuration is
-stored below `~/.var/app/dev.jag_k.clipboard_transformer/config/`. Host
+stored below `~/.var/app/dev.jagk.clipboard_transformer/config/`. Host
 executables and arbitrary host files are not visible to `shell` rules, and
 in-app autostart is disabled. URL imports and plugin downloads remain available
 through the sandbox's network permission.
@@ -180,7 +184,7 @@ through the sandbox's network permission.
 Launch the desktop application normally:
 
 ```sh
-flatpak run dev.jag_k.clipboard_transformer
+flatpak run dev.jagk.clipboard_transformer
 ```
 
 The CLI is included in the same Flatpak but is not added to the host `PATH`.
@@ -188,9 +192,9 @@ Select it explicitly with `--command` and pass CLI arguments after the app ID:
 
 ```sh
 flatpak run --command=clipboard-transformer \
-  dev.jag_k.clipboard_transformer --help
+  dev.jagk.clipboard_transformer --help
 flatpak run --command=clipboard-transformer \
-  dev.jag_k.clipboard_transformer doctor
+  dev.jagk.clipboard_transformer doctor
 ```
 
 ### Nix on Linux
@@ -277,14 +281,14 @@ Install and launch that bundle with:
 
 ```sh
 flatpak install --user ./clipboard-transformer-<version>-x86_64.flatpak
-flatpak run dev.jag_k.clipboard_transformer
+flatpak run dev.jagk.clipboard_transformer
 ```
 
 Its sandboxed CLI can be invoked explicitly:
 
 ```sh
 flatpak run --command=clipboard-transformer \
-  dev.jag_k.clipboard_transformer doctor
+  dev.jagk.clipboard_transformer doctor
 ```
 
 The native DEB, RPM, and Pacman packages install the desktop application, CLI,

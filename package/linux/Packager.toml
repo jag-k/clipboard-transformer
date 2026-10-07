@@ -34,7 +34,7 @@ packageName = "clipboard-transformer"
 [deb.files]
 "dev.jag-k.clipboard-transformer.desktop" = "usr/share/applications/dev.jag-k.clipboard-transformer.desktop"
 "dev.jag-k.clipboard-transformer.service" = "usr/share/dbus-1/services/dev.jag-k.clipboard-transformer.service"
-"../../assets/tray.svg" = "usr/share/icons/hicolor/scalable/status/clipboard-transformer-symbolic.svg"
+"../../assets/tray.svg" = "usr/share/icons/hicolor/scalable/status/dev.jagk.clipboard_transformer-symbolic.svg"
 "../../LICENSE" = "usr/share/doc/clipboard-transformer/copyright"
 
 [pacman]
@@ -44,11 +44,11 @@ provides = ["clipboard-transformer"]
 [pacman.files]
 "dev.jag-k.clipboard-transformer.desktop" = "usr/share/applications/dev.jag-k.clipboard-transformer.desktop"
 "dev.jag-k.clipboard-transformer.service" = "usr/share/dbus-1/services/dev.jag-k.clipboard-transformer.service"
-"../../assets/tray.svg" = "usr/share/icons/hicolor/scalable/status/clipboard-transformer-symbolic.svg"
+"../../assets/tray.svg" = "usr/share/icons/hicolor/scalable/status/dev.jagk.clipboard_transformer-symbolic.svg"
 "../../LICENSE" = "usr/share/licenses/clipboard-transformer/LICENSE"
 
 [appimage.files]
 "dev.jag-k.clipboard-transformer.desktop" = "usr/share/applications/clipboard-transformer-app.desktop"
-"../../assets/tray.svg" = "usr/share/icons/hicolor/scalable/status/clipboard-transformer-symbolic.svg"
+"../../assets/tray.svg" = "usr/share/icons/hicolor/scalable/status/dev.jagk.clipboard_transformer-symbolic.svg"
 "appimage-hicolor.index.theme" = "usr/share/icons/hicolor/index.theme"
 "../../LICENSE" = "usr/share/licenses/clipboard-transformer/LICENSE"

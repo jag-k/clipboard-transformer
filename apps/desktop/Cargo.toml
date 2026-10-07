@@ -19,7 +19,7 @@ assets = [
   { source = "package/linux/dev.jag-k.clipboard-transformer.desktop", dest = "/usr/share/applications/dev.jag-k.clipboard-transformer.desktop", mode = "644" },
   { source = "package/linux/dev.jag-k.clipboard-transformer.service", dest = "/usr/share/dbus-1/services/dev.jag-k.clipboard-transformer.service", mode = "644" },
   { source = "assets/generated/linux/app-icon.png", dest = "/usr/share/icons/hicolor/256x256/apps/clipboard-transformer-app.png", mode = "644" },
-  { source = "assets/tray.svg", dest = "/usr/share/icons/hicolor/scalable/status/clipboard-transformer-symbolic.svg", mode = "644" },
+  { source = "assets/tray.svg", dest = "/usr/share/icons/hicolor/scalable/status/dev.jagk.clipboard_transformer-symbolic.svg", mode = "644" },
   { source = "LICENSE", dest = "/usr/share/licenses/clipboard-transformer/LICENSE", mode = "644" },
 ]
 

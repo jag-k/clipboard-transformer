@@ -71,7 +71,7 @@
               install -Dm0644 assets/generated/linux/app-icon.png \
                 $out/share/icons/hicolor/256x256/apps/clipboard-transformer-app.png
               install -Dm0644 assets/tray.svg \
-                $out/share/icons/hicolor/scalable/status/clipboard-transformer-symbolic.svg
+                $out/share/icons/hicolor/scalable/status/dev.jagk.clipboard_transformer-symbolic.svg
 
               wrapProgram $out/bin/clipboard-transformer \
                 --prefix LD_LIBRARY_PATH : ${pkgs.lib.makeLibraryPath [ pkgs.wayland ]}

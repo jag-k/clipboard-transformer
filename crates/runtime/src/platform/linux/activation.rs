@@ -7,8 +7,8 @@ use zbus::zvariant::OwnedValue;
 
 use super::diagnostics::SUPPORT_URL;
 
-const APPLICATION_ID: &str = "dev.jag-k.clipboard-transformer";
-const APPLICATION_PATH: &str = "/dev/jag_k/clipboard_transformer";
+/// Bus name the native packages' D-Bus service file declares.
+const NATIVE_APPLICATION_ID: &str = "dev.jag-k.clipboard-transformer";
 const OPEN_SUPPORT_ACTION: &str = "open-support";
 
 struct Application {
@@ -41,13 +41,14 @@ impl Application {
 /// Runs the short-lived D-Bus activation path used by a failure notification
 /// after the main desktop process has already exited.
 pub fn run_service() -> Result<()> {
+    let application_id = application_id(std::env::var("FLATPAK_ID").ok());
     let (action_sender, action_receiver) = mpsc::channel();
     let _connection = zbus::blocking::connection::Builder::session()
         .context("connect Linux activation service to the session bus")?
-        .name(APPLICATION_ID)
+        .name(application_id.as_str())
         .context("claim Linux application D-Bus name")?
         .serve_at(
-            APPLICATION_PATH,
+            object_path(&application_id),
             Application {
                 actions: action_sender,
             },
@@ -63,6 +64,21 @@ pub fn run_service() -> Result<()> {
         anyhow::bail!("unsupported Linux application action: {action}");
     }
     open_support_url()
+}
+
+/// Inside Flatpak the activation name must be the app ID: the portal and the
+/// exported service file both use it, and the sandbox lets an app own its own
+/// ID without an `--own-name` permission.
+fn application_id(flatpak_id: Option<String>) -> String {
+    flatpak_id
+        .filter(|id| !id.is_empty())
+        .unwrap_or_else(|| NATIVE_APPLICATION_ID.to_string())
+}
+
+/// The `org.freedesktop.Application` object path for a bus name: dots become
+/// path separators and dashes, which object paths forbid, become underscores.
+fn object_path(application_id: &str) -> String {
+    format!("/{}", application_id.replace('.', "/").replace('-', "_"))
 }
 
 fn open_support_url() -> Result<()> {
@@ -104,9 +120,24 @@ mod tests {
     use super::*;
 
     #[test]
-    fn activation_identity_and_action_are_fixed() {
-        assert_eq!(APPLICATION_ID, "dev.jag-k.clipboard-transformer");
+    fn activation_action_is_fixed() {
         assert_eq!(OPEN_SUPPORT_ACTION, "open-support");
         assert!(SUPPORT_URL.starts_with("https://"));
+    }
+
+    #[test]
+    fn native_activation_uses_the_packaged_service_name() {
+        for flatpak_id in [None, Some(String::new())] {
+            let id = application_id(flatpak_id);
+            assert_eq!(id, "dev.jag-k.clipboard-transformer");
+            assert_eq!(object_path(&id), "/dev/jag_k/clipboard_transformer");
+        }
+    }
+
+    #[test]
+    fn flatpak_activation_uses_the_app_id() {
+        let id = application_id(Some("dev.jagk.clipboard_transformer".to_string()));
+        assert_eq!(id, "dev.jagk.clipboard_transformer");
+        assert_eq!(object_path(&id), "/dev/jagk/clipboard_transformer");
     }
 }

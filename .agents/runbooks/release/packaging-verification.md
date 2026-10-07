@@ -218,7 +218,7 @@ flatpak remote-add --user --if-not-exists flathub \
   https://flathub.org/repo/flathub.flatpakrepo
 just package-flatpak
 flatpak install --user ./target/clipboard-transformer-*.flatpak
-flatpak run dev.jag_k.clipboard_transformer
+flatpak run dev.jagk.clipboard_transformer
 ```
 
 Verify X11, native data-control Wayland, the tray, notification actions, URL
@@ -234,7 +234,7 @@ gh workflow run publish-flatpak.yml -f version="$version" -f tag="v$version"
 flatpak remote-add --user --if-not-exists jag-k \
   https://jag-k.github.io/flatpak-repo/jag-k.flatpakrepo
 flatpak remote-ls jag-k
-flatpak install --user jag-k dev.jag_k.clipboard_transformer
+flatpak install --user jag-k dev.jagk.clipboard_transformer
 ```
 
 Verify that the remote summary and application ref are GPG-verified. Publish a

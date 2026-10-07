@@ -77,7 +77,7 @@ exactly = 1
 prerelease = true
 
 [[pre-release-replacements]]
-file = "../../package/flatpak/dev.jag_k.clipboard_transformer.metainfo.xml"
+file = "../../package/flatpak/dev.jagk.clipboard_transformer.metainfo.xml"
 search = '<release version="[^"]+" date="[^"]+" />'
 replace = '<release version="{{version}}" date="{{date}}" />'
 exactly = 1

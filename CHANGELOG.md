@@ -17,6 +17,11 @@ The format is based on [Keep a Changelog], and this project follows
 - **Packaging/Flatpak:** Show the app icon, summary, and homepage when
   installing from the `.flatpakref`.
 - **Packaging/Linux:** Add search keywords to the desktop entries.
+- **Packaging/Flatpak:** Rename the Flatpak to `dev.jagk.clipboard_transformer`.
+  The `dev.jag_k.clipboard_transformer` ref is marked end-of-life with a rebase,
+  so `flatpak update` offers existing installations the new ID and migrates
+  their sandbox data. Notification activation now owns the app ID instead of a
+  separate `--own-name` bus name.
 - **Packaging/Flatpak:** Generate AppStream release history with notes and
   release links from `CHANGELOG.md` (parsed with mistune) before the Flatpak
   build, so software centers show a changelog for every version. Markdown
@@ -33,6 +38,10 @@ The format is based on [Keep a Changelog], and this project follows
   AppStream pull and software centers such as KDE Discover showed the branch
   name (`stable`) instead of the available version. Publication also signs
   heads that earlier releases left unsigned.
+- **Linux/Tray:** Name the symbolic tray icon
+  `dev.jagk.clipboard_transformer-symbolic` in every Linux package. Flatpak
+  exports only app-ID-prefixed icons, so the sandboxed tray icon previously
+  fell back to the raster pixmap instead of the theme-aware symbolic icon.
 - **Release:** Write the Flatpak bundle and source archive `.sha256` files
   with the bare file name, like every other release asset, so
   `sha256sum --check` works next to the download.

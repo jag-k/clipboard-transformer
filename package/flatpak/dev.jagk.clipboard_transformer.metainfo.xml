@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Copyright 2026 jag-k -->
 <component type="desktop-application">
-  <id>dev.jag_k.clipboard_transformer</id>
+  <id>dev.jagk.clipboard_transformer</id>
   <name>Clipboard Transformer</name>
   <summary>Transform clipboard content with configurable rules</summary>
-  <developer id="dev.jag_k">
+  <developer id="dev.jagk">
     <name>jag-k</name>
   </developer>
   <metadata_license>CC0-1.0</metadata_license>
@@ -25,7 +25,7 @@
   <url type="help">https://github.com/jag-k/clipboard-transformer/tree/main/docs</url>
   <url type="vcs-browser">https://github.com/jag-k/clipboard-transformer</url>
   <url type="contribute">https://github.com/jag-k/clipboard-transformer/blob/main/CONTRIBUTING.md</url>
-  <launchable type="desktop-id">dev.jag_k.clipboard_transformer.desktop</launchable>
+  <launchable type="desktop-id">dev.jagk.clipboard_transformer.desktop</launchable>
   <branding>
     <color type="primary" scheme_preference="light">#ffa026</color>
     <color type="primary" scheme_preference="dark">#70221e</color>
@@ -43,7 +43,12 @@
     <control>keyboard</control>
     <control>pointing</control>
   </recommends>
+  <!-- The ID earlier releases were published under. -->
+  <replaces>
+    <id>dev.jag_k.clipboard_transformer</id>
+  </replaces>
   <provides>
+    <id>dev.jag_k.clipboard_transformer</id>
     <binary>clipboard-transformer</binary>
     <binary>clipboard-transformer-app</binary>
   </provides>
