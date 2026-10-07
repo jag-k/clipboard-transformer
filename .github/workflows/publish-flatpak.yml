@@ -179,6 +179,7 @@ jobs:
           git add --all \
             .nojekyll \
             clipboard-transformer.flatpakref \
+            icons \
             jag-k.flatpakrepo \
             repo
           if git diff --cached --quiet; then

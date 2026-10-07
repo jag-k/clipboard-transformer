@@ -24,7 +24,12 @@
   <url type="bugtracker">https://github.com/jag-k/clipboard-transformer/issues</url>
   <url type="help">https://github.com/jag-k/clipboard-transformer/tree/main/docs</url>
   <url type="vcs-browser">https://github.com/jag-k/clipboard-transformer</url>
+  <url type="contribute">https://github.com/jag-k/clipboard-transformer/blob/main/CONTRIBUTING.md</url>
   <launchable type="desktop-id">dev.jag_k.clipboard_transformer.desktop</launchable>
+  <branding>
+    <color type="primary" scheme_preference="light">#ffa026</color>
+    <color type="primary" scheme_preference="dark">#70221e</color>
+  </branding>
   <categories>
     <category>Utility</category>
   </categories>

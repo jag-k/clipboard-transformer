@@ -80,9 +80,11 @@ jobs:
           version: ${{ inputs.version }}
 
       # flatpak-builder builds offline, so both ignored inputs are generated
-      # before it runs, exactly as `just package-flatpak` does locally.
-      - name: Generate Flatpak inputs
-        run: just gen-flatpak-sources gen-flatpak-metainfo
+      # before it runs, exactly as `just package-flatpak` does locally. The
+      # metadata check also generates the metainfo, then validates it strictly;
+      # flatpak-builder's own compose step only reports hard errors.
+      - name: Generate and validate Flatpak inputs
+        run: just gen-flatpak-sources check-flatpak-metadata
 
       - name: Build Flatpak bundle
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6

@@ -222,6 +222,18 @@ gen-flatpak-metainfo:
       package/flatpak/{{ flatpak_app_id }}.metainfo.xml CHANGELOG.md \
       package/flatpak/generated.metainfo.xml
 
+# Needs `appstreamcli` and `desktop-file-validate`, which the Flatpak CI image
+# provides; locally install AppStream and desktop-file-utils.
+[doc('Validate the generated Flatpak metainfo and the Linux desktop entries')]
+[group('check')]
+[unix]
+check-flatpak-metadata: gen-flatpak-metainfo
+    appstreamcli validate --pedantic --explain --no-net \
+      package/flatpak/generated.metainfo.xml
+    desktop-file-validate \
+      package/flatpak/{{ flatpak_app_id }}.desktop \
+      package/linux/dev.jag-k.clipboard-transformer.desktop
+
 [arg('force', long='force', value='true')]
 [doc('Compile AppIcon.icon into macOS/Linux/Windows icon assets')]
 [group('gen')]

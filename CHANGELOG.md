@@ -10,8 +10,13 @@ The format is based on [Keep a Changelog], and this project follows
 
 ### Changed
 
-- **Packaging/Flatpak:** Add help and source links, keywords, categories, and
-  input-control hints to the AppStream metadata shown by software centers.
+- **Packaging/Flatpak:** Add help, source, and contribution links, keywords,
+  categories, input-control hints, and light and dark brand colors to the
+  AppStream metadata shown by software centers, and validate it strictly with
+  `appstreamcli` during the Flatpak build.
+- **Packaging/Flatpak:** Show the app icon, summary, and homepage when
+  installing from the `.flatpakref`.
+- **Packaging/Linux:** Add search keywords to the desktop entries.
 - **Packaging/Flatpak:** Generate AppStream release history with notes and
   release links from `CHANGELOG.md` (parsed with mistune) before the Flatpak
   build, so software centers show a changelog for every version. Markdown

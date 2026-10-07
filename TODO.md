@@ -12,6 +12,10 @@ release notes rather than this file.
   developer or organization is region-eligible, otherwise use an OV
   certificate backed by a cloud HSM. Do not pay an EV premium solely for
   SmartScreen. Timestamp every signature and verify signed artifacts in CI.
+- [ ] Add `<screenshots>` to the Flatpak AppStream metainfo: the tray menu,
+  a notification, and a rule-config example, with captions and stable,
+  release-tagged image URLs. Software centers such as KDE Discover show an
+  empty gallery without them, and Flathub requires them.
 
 ## Runtime and tooling
 

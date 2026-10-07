@@ -6,5 +6,6 @@ Exec=clipboard-transformer-app
 Icon=clipboard-transformer-app
 Terminal=false
 Categories=Utility;
+Keywords=clipboard;transform;rules;tray;
 StartupNotify=false
 X-GNOME-UsesNotifications=true
