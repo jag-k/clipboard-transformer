@@ -330,7 +330,7 @@ pub fn json_schema_pretty() -> Result<String> {
 /// One discovered plugin rule type contributed to the effective schema.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PluginRuleSchemaContribution {
-    /// Full namespaced rule type, e.g. `dev.jag-k.gitlab/human-readable-link`.
+    /// Full namespaced rule type, e.g. `dev.jagk.gitlab/human-readable-link`.
     pub rule_type: String,
     pub description: Option<String>,
     /// Optional JSON Schema for the rule's settings fields.

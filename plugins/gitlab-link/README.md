@@ -103,26 +103,26 @@ Minimal (matches gitlab.com and falls back to offline labels):
 
 ```yaml
 rules:
-  - type: dev.jag-k.gitlab/project
+  - type: dev.jagk.gitlab/project
     id: gitlab-project
-  - type: dev.jag-k.gitlab/mr
+  - type: dev.jagk.gitlab/mr
     id: gitlab-mr
     comment_display: marker
-  - type: dev.jag-k.gitlab/issue
+  - type: dev.jagk.gitlab/issue
     id: gitlab-issue
     # hidden | marker | id | author | author-and-id
     comment_display: author-and-id
-  - type: dev.jag-k.gitlab/milestone
+  - type: dev.jagk.gitlab/milestone
     id: gitlab-milestone
-  - type: dev.jag-k.gitlab/pipeline
+  - type: dev.jagk.gitlab/pipeline
     id: gitlab-pipeline
-  - type: dev.jag-k.gitlab/job
+  - type: dev.jagk.gitlab/job
     id: gitlab-job
-  - type: dev.jag-k.gitlab/commit
+  - type: dev.jagk.gitlab/commit
     id: gitlab-commit
-  - type: dev.jag-k.gitlab/tag
+  - type: dev.jagk.gitlab/tag
     id: gitlab-tag
-  - type: dev.jag-k.gitlab/repository
+  - type: dev.jagk.gitlab/repository
     id: gitlab-repository
 ```
 
@@ -130,7 +130,7 @@ Full (real titles from a self-hosted instance):
 
 ```yaml
 plugins:
-  dev.jag-k.gitlab:
+  dev.jagk.gitlab:
     permissions:
       http: ["gitlab.example.com"]
       env_expansion: true
@@ -140,7 +140,7 @@ plugins:
           token: ${GITLAB_TOKEN}
 
 rules:
-  - type: dev.jag-k.gitlab/project
+  - type: dev.jagk.gitlab/project
     id: gitlab-project
     # Exact paths below /-/. This map replaces the defaults when present.
     # Nested paths are supported.
@@ -152,23 +152,23 @@ rules:
       wikis/home: Wiki
     # hosts defaults to the configured instance hosts.
     # online defaults to true; set false to force offline labels.
-  - type: dev.jag-k.gitlab/mr
+  - type: dev.jagk.gitlab/mr
     id: gitlab-mr
     # hosts defaults to the configured instance hosts.
     # online defaults to true; set false to force offline labels.
-  - type: dev.jag-k.gitlab/issue
+  - type: dev.jagk.gitlab/issue
     id: gitlab-issue
-  - type: dev.jag-k.gitlab/milestone
+  - type: dev.jagk.gitlab/milestone
     id: gitlab-milestone
-  - type: dev.jag-k.gitlab/pipeline
+  - type: dev.jagk.gitlab/pipeline
     id: gitlab-pipeline
-  - type: dev.jag-k.gitlab/job
+  - type: dev.jagk.gitlab/job
     id: gitlab-job
-  - type: dev.jag-k.gitlab/commit
+  - type: dev.jagk.gitlab/commit
     id: gitlab-commit
-  - type: dev.jag-k.gitlab/tag
+  - type: dev.jagk.gitlab/tag
     id: gitlab-tag
-  - type: dev.jag-k.gitlab/repository
+  - type: dev.jagk.gitlab/repository
     id: gitlab-repository
     # All are enabled by default.
     kinds: [tree, blob, raw, blame, commits, compare]
@@ -183,6 +183,6 @@ An explicit empty map (`aliases: {}`) limits it to bare project URLs. Aliases
 match exact paths only, so semantic rules remain responsible for individual
 resources.
 
-`clipboard-transformer plugin example dev.jag-k.gitlab` prints a copyable
-starting point; `plugin doctor dev.jag-k.gitlab` explains why titles are
+`clipboard-transformer plugin example dev.jagk.gitlab` prints a copyable
+starting point; `plugin doctor dev.jagk.gitlab` explains why titles are
 disabled when something is missing.

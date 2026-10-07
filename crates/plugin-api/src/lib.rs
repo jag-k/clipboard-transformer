@@ -25,7 +25,7 @@ pub const MANIFEST_SECTION_NAME: &str = "clipboard-transformer/manifest";
 /// Static identity and integration metadata embedded in the plugin module.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct PluginManifest {
-    /// Stable namespaced plugin id, e.g. `dev.jag-k.gitlab`.
+    /// Stable namespaced plugin id, e.g. `dev.jagk.gitlab`.
     pub id: String,
     /// Human-readable display name.
     pub name: String,
@@ -357,7 +357,7 @@ mod tests {
 
     fn manifest_json() -> serde_json::Value {
         serde_json::json!({
-            "id": "dev.jag-k.gitlab",
+            "id": "dev.jagk.gitlab",
             "name": "GitLab Links",
             "version": "0.1.0",
             "api_version": 1,
@@ -372,7 +372,7 @@ mod tests {
         manifest.validate().unwrap();
         assert_eq!(
             manifest.rule_type_ids().collect::<Vec<_>>(),
-            ["dev.jag-k.gitlab/human-readable-link"]
+            ["dev.jagk.gitlab/human-readable-link"]
         );
         assert!(manifest.requests_capability(CapabilityKind::Http));
         assert!(!manifest.requests_capability(CapabilityKind::EnvExpansion));
@@ -473,8 +473,8 @@ mod tests {
     #[test]
     fn split_rule_type_returns_plugin_and_local_parts() {
         assert_eq!(
-            split_rule_type("dev.jag-k.gitlab/human-readable-link"),
-            Some(("dev.jag-k.gitlab", "human-readable-link"))
+            split_rule_type("dev.jagk.gitlab/human-readable-link"),
+            Some(("dev.jagk.gitlab", "human-readable-link"))
         );
         assert_eq!(split_rule_type("regexp"), None);
     }

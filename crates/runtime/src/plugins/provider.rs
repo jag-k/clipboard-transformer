@@ -18,7 +18,7 @@ use ct_plugin_api::{CompileRuleRequest, CompileRuleResponse, TransformRequest, T
 pub(super) type SharedRuntime = Arc<Mutex<PluginRuntime>>;
 
 pub(super) struct PluginRuleProvider {
-    /// Full namespaced rule type, e.g. `dev.jag-k.gitlab/human-readable-link`.
+    /// Full namespaced rule type, e.g. `dev.jagk.gitlab/human-readable-link`.
     kind: String,
     /// Local rule type name inside the plugin.
     local_type: String,

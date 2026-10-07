@@ -10,6 +10,9 @@ The format is based on [Keep a Changelog], and this project follows
 
 ### Changed
 
+- **Plugins:** Rename the example GitLab plugin to `dev.jagk.gitlab`. Rename
+  `plugins.dev.jag-k.gitlab` and every `dev.jag-k.gitlab/...` rule type in
+  existing configurations; the old ID is not accepted.
 - **Packaging/Flatpak:** Add help, source, and contribution links, keywords,
   categories, input-control hints, and light and dark brand colors to the
   AppStream metadata shown by software centers, and validate it strictly with

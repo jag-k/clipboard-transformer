@@ -1651,7 +1651,7 @@ fn yaml_plugins_section_parses_permissions_and_settings() {
         &path,
         r#"
 plugins:
-  dev.jag-k.gitlab:
+  dev.jagk.gitlab:
     permissions:
       http:
         - gitlab.example.com
@@ -1664,7 +1664,7 @@ rules: []
     .unwrap();
 
     let config = load_config(&path).unwrap();
-    let plugin = config.plugins.get("dev.jag-k.gitlab").unwrap();
+    let plugin = config.plugins.get("dev.jagk.gitlab").unwrap();
     assert!(plugin.permissions.env_expansion);
     assert_eq!(plugin.permissions.http, ["gitlab.example.com"]);
     assert_eq!(
@@ -1683,11 +1683,11 @@ fn toml_plugins_section_parses_permissions_and_settings() {
     fs::write(
         &path,
         r#"
-[plugins."dev.jag-k.gitlab".permissions]
+[plugins."dev.jagk.gitlab".permissions]
 env_expansion = true
 http = ["gitlab.example.com"]
 
-[plugins."dev.jag-k.gitlab".settings]
+[plugins."dev.jagk.gitlab".settings]
 token = "${GITLAB_TOKEN}"
 
 [[rules]]
@@ -1699,7 +1699,7 @@ to = "dog"
     .unwrap();
 
     let config = load_config(&path).unwrap();
-    let plugin = config.plugins.get("dev.jag-k.gitlab").unwrap();
+    let plugin = config.plugins.get("dev.jagk.gitlab").unwrap();
     assert!(plugin.permissions.env_expansion);
     assert_eq!(plugin.permissions.http, ["gitlab.example.com"]);
     assert_eq!(config.rules.len(), 1);
@@ -1906,7 +1906,7 @@ fn effective_schema_includes_plugin_rule_variants() {
     use ct_runtime::config::{json_schema_pretty_with_plugins, PluginRuleSchemaContribution};
 
     let schema = json_schema_pretty_with_plugins(&[PluginRuleSchemaContribution {
-        rule_type: "dev.jag-k.gitlab/human-readable-link".to_string(),
+        rule_type: "dev.jagk.gitlab/human-readable-link".to_string(),
         description: Some("GitLab links".to_string()),
         settings_schema: Some(serde_json::json!({
             "type": "object",
@@ -1919,12 +1919,12 @@ fn effective_schema_includes_plugin_rule_variants() {
     let schema: serde_json::Value = serde_json::from_str(&schema).unwrap();
 
     let definition = schema
-        .pointer("/definitions/PluginRuleSchema_dev_jag_k_gitlab_human_readable_link")
+        .pointer("/definitions/PluginRuleSchema_dev_jagk_gitlab_human_readable_link")
         .expect("plugin rule definition present");
     assert_eq!(
         definition.pointer("/properties/type/enum/0"),
         Some(&serde_json::Value::String(
-            "dev.jag-k.gitlab/human-readable-link".to_string()
+            "dev.jagk.gitlab/human-readable-link".to_string()
         ))
     );
     // The unknown-type fallback excludes plugin-provided types so the oneOf
@@ -1934,7 +1934,7 @@ fn effective_schema_includes_plugin_rule_variants() {
         .and_then(serde_json::Value::as_array)
         .unwrap();
     assert!(excluded.contains(&serde_json::Value::String(
-        "dev.jag-k.gitlab/human-readable-link".to_string()
+        "dev.jagk.gitlab/human-readable-link".to_string()
     )));
     // The plugins section is part of the document schema.
     assert!(schema.pointer("/properties/plugins").is_some());

@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-/// Plugin settings under `plugins.dev.jag-k.gitlab.settings`.
+/// Plugin settings under `plugins.dev.jagk.gitlab.settings`.
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(schemars::JsonSchema))]
 #[serde(default)]

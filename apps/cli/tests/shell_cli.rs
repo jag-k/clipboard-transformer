@@ -146,7 +146,7 @@ fn plugin_transform_keeps_runtime_trace_out_of_stderr() {
     let config = r#"
 rules:
   - id: gitlab-project
-    type: dev.jag-k.gitlab/project
+    type: dev.jagk.gitlab/project
     hosts: [gitlab.example.com]
     online: false
 "#;

@@ -358,7 +358,7 @@ pub enum ExternalTransform {
 /// selection, and pipeline order; providers own their opaque settings and
 /// either selected-text or complete-item transformation.
 pub trait ExternalRuleProvider: Send + Sync {
-    /// Full namespaced rule type id, e.g. `dev.jag-k.gitlab/human-readable-link`.
+    /// Full namespaced rule type id, e.g. `dev.jagk.gitlab/human-readable-link`.
     fn kind(&self) -> &str;
 
     /// Accepted formats, in priority order, used when a rule sets none.

@@ -14,8 +14,8 @@
   ],
   "description": "Rewrites copied GitLab project, planning, CI/CD, and repository URLs into Markdown links. With a configured instance token and an http grant it fetches resource titles and project names.",
   "homepage": "https://github.com/jag-k/clipboard-transformer",
-  "id": "dev.jag-k.gitlab",
-  "instructions": "Use dev.jag-k.gitlab/project for project roots and static pages; use mr, issue, milestone, pipeline, job, commit, and tag for individual resources; use repository for tree, blob, raw, blame, commits, and compare URLs. MR and issue rules accept comment_display: hidden, marker, id, author, or author-and-id. Set online: false to force offline labels.",
+  "id": "dev.jagk.gitlab",
+  "instructions": "Use dev.jagk.gitlab/project for project roots and static pages; use mr, issue, milestone, pipeline, job, commit, and tag for individual resources; use repository for tree, blob, raw, blame, commits, and compare URLs. MR and issue rules accept comment_display: hidden, marker, id, author, or author-and-id. Set online: false to force offline labels.",
   "license": "MPL-2.0",
   "name": "GitLab Links",
   "rules": [
@@ -32,7 +32,7 @@
           ],
           "id": "gitlab-project",
           "online": true,
-          "type": "dev.jag-k.gitlab/project"
+          "type": "dev.jagk.gitlab/project"
         }
       ],
       "formats": [
@@ -107,7 +107,7 @@
           ],
           "id": "gitlab-mr",
           "online": true,
-          "type": "dev.jag-k.gitlab/mr"
+          "type": "dev.jagk.gitlab/mr"
         }
       ],
       "formats": [
@@ -199,7 +199,7 @@
           ],
           "id": "gitlab-issue",
           "online": true,
-          "type": "dev.jag-k.gitlab/issue"
+          "type": "dev.jagk.gitlab/issue"
         }
       ],
       "formats": [
@@ -290,7 +290,7 @@
           ],
           "id": "gitlab-milestone",
           "online": true,
-          "type": "dev.jag-k.gitlab/milestone"
+          "type": "dev.jagk.gitlab/milestone"
         }
       ],
       "formats": [
@@ -330,7 +330,7 @@
           ],
           "id": "gitlab-pipeline",
           "online": true,
-          "type": "dev.jag-k.gitlab/pipeline"
+          "type": "dev.jagk.gitlab/pipeline"
         }
       ],
       "formats": [
@@ -370,7 +370,7 @@
           ],
           "id": "gitlab-job",
           "online": true,
-          "type": "dev.jag-k.gitlab/job"
+          "type": "dev.jagk.gitlab/job"
         }
       ],
       "formats": [
@@ -410,7 +410,7 @@
           ],
           "id": "gitlab-commit",
           "online": true,
-          "type": "dev.jag-k.gitlab/commit"
+          "type": "dev.jagk.gitlab/commit"
         }
       ],
       "formats": [
@@ -450,7 +450,7 @@
           ],
           "id": "gitlab-tag",
           "online": true,
-          "type": "dev.jag-k.gitlab/tag"
+          "type": "dev.jagk.gitlab/tag"
         }
       ],
       "formats": [
@@ -498,7 +498,7 @@
             "compare"
           ],
           "online": true,
-          "type": "dev.jag-k.gitlab/repository"
+          "type": "dev.jagk.gitlab/repository"
         }
       ],
       "formats": [
@@ -627,7 +627,7 @@
         "type": "object"
       }
     },
-    "description": "Plugin settings under `plugins.dev.jag-k.gitlab.settings`.",
+    "description": "Plugin settings under `plugins.dev.jagk.gitlab.settings`.",
     "properties": {
       "instances": {
         "default": [],

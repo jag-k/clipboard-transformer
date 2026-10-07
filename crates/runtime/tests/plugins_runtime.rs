@@ -107,20 +107,20 @@ fn example_plugin_manifest_is_discovered_without_execution() {
         return;
     };
     let manifest = ct_runtime::plugins::extract_manifest(&module).unwrap();
-    assert_eq!(manifest.id, "dev.jag-k.gitlab");
+    assert_eq!(manifest.id, "dev.jagk.gitlab");
     assert_eq!(manifest.api_version, 1);
     assert_eq!(
         manifest.rule_type_ids().collect::<Vec<_>>(),
         [
-            "dev.jag-k.gitlab/project",
-            "dev.jag-k.gitlab/mr",
-            "dev.jag-k.gitlab/issue",
-            "dev.jag-k.gitlab/milestone",
-            "dev.jag-k.gitlab/pipeline",
-            "dev.jag-k.gitlab/job",
-            "dev.jag-k.gitlab/commit",
-            "dev.jag-k.gitlab/tag",
-            "dev.jag-k.gitlab/repository"
+            "dev.jagk.gitlab/project",
+            "dev.jagk.gitlab/mr",
+            "dev.jagk.gitlab/issue",
+            "dev.jagk.gitlab/milestone",
+            "dev.jagk.gitlab/pipeline",
+            "dev.jagk.gitlab/job",
+            "dev.jagk.gitlab/commit",
+            "dev.jagk.gitlab/tag",
+            "dev.jagk.gitlab/repository"
         ]
     );
     assert!(manifest.rules.iter().all(|rule| {
@@ -141,15 +141,15 @@ fn example_plugin_initializes_and_transforms_clipboard_text() {
     assert_eq!(
         catalog.known_rule_types().into_iter().collect::<Vec<_>>(),
         [
-            "dev.jag-k.gitlab/commit",
-            "dev.jag-k.gitlab/issue",
-            "dev.jag-k.gitlab/job",
-            "dev.jag-k.gitlab/milestone",
-            "dev.jag-k.gitlab/mr",
-            "dev.jag-k.gitlab/pipeline",
-            "dev.jag-k.gitlab/project",
-            "dev.jag-k.gitlab/repository",
-            "dev.jag-k.gitlab/tag"
+            "dev.jagk.gitlab/commit",
+            "dev.jagk.gitlab/issue",
+            "dev.jagk.gitlab/job",
+            "dev.jagk.gitlab/milestone",
+            "dev.jagk.gitlab/mr",
+            "dev.jagk.gitlab/pipeline",
+            "dev.jagk.gitlab/project",
+            "dev.jagk.gitlab/repository",
+            "dev.jagk.gitlab/tag"
         ]
     );
 
@@ -162,38 +162,38 @@ fn example_plugin_initializes_and_transforms_clipboard_text() {
     let rule: ct_runtime::config::ConfigDocument = serde_yaml::from_str(
         r#"
 rules:
-  - type: dev.jag-k.gitlab/project
+  - type: dev.jagk.gitlab/project
     id: gitlab-project
     hosts: [gitlab.example.com]
     online: false
-  - type: dev.jag-k.gitlab/mr
+  - type: dev.jagk.gitlab/mr
     id: gitlab-mr
     hosts: [gitlab.example.com]
-  - type: dev.jag-k.gitlab/issue
+  - type: dev.jagk.gitlab/issue
     id: gitlab-issue
     hosts: [gitlab.example.com]
     online: false
-  - type: dev.jag-k.gitlab/milestone
+  - type: dev.jagk.gitlab/milestone
     id: gitlab-milestone
     hosts: [gitlab.example.com]
     online: false
-  - type: dev.jag-k.gitlab/pipeline
+  - type: dev.jagk.gitlab/pipeline
     id: gitlab-pipeline
     hosts: [gitlab.example.com]
     online: false
-  - type: dev.jag-k.gitlab/job
+  - type: dev.jagk.gitlab/job
     id: gitlab-job
     hosts: [gitlab.example.com]
     online: false
-  - type: dev.jag-k.gitlab/commit
+  - type: dev.jagk.gitlab/commit
     id: gitlab-commit
     hosts: [gitlab.example.com]
     online: false
-  - type: dev.jag-k.gitlab/tag
+  - type: dev.jagk.gitlab/tag
     id: gitlab-tag
     hosts: [gitlab.example.com]
     online: false
-  - type: dev.jag-k.gitlab/repository
+  - type: dev.jagk.gitlab/repository
     id: gitlab-repository
     hosts: [gitlab.example.com]
     online: false
@@ -473,7 +473,7 @@ rules:
     let custom: ct_runtime::config::ConfigDocument = serde_yaml::from_str(
         r#"
 rules:
-  - type: dev.jag-k.gitlab/project
+  - type: dev.jagk.gitlab/project
     id: gitlab-project-custom
     hosts: [gitlab.example.com]
     online: false
@@ -513,7 +513,7 @@ rules:
         let yaml = format!(
             r#"
 rules:
-  - type: dev.jag-k.gitlab/mr
+  - type: dev.jagk.gitlab/mr
     id: comment-{mode}
     hosts: [gitlab.example.com]
     online: false
@@ -574,7 +574,7 @@ rules:
   - type: ruleset
     id: nested
     rules:
-      - type: dev.jag-k.gitlab/mr
+      - type: dev.jagk.gitlab/mr
         id: gitlab-mr
 "#,
     )
@@ -602,7 +602,7 @@ fn invalid_plugin_rule_settings_are_skipped_with_a_reason() {
     let document: ct_runtime::config::ConfigDocument = serde_yaml::from_str(
         r#"
 rules:
-  - type: dev.jag-k.gitlab/mr
+  - type: dev.jagk.gitlab/mr
     id: broken
     hosts: ["bad/host"]
   - id: still-works
@@ -643,7 +643,7 @@ fn config_load_keeps_plugin_rules_only_when_the_type_is_known() {
         &config_path,
         r#"
 rules:
-  - type: dev.jag-k.gitlab/mr
+  - type: dev.jagk.gitlab/mr
     id: gitlab-mr
   - type: dev.example.missing/other
     id: dropped
@@ -680,7 +680,7 @@ fn declared_grants_flow_through_and_env_expansion_resolves_tokens() {
     // become effective and the expanded token reaches the plugin.
     let configs: BTreeMap<String, ct_runtime::plugins::PluginConfig> = serde_yaml::from_str(
         r#"
-dev.jag-k.gitlab:
+dev.jagk.gitlab:
   permissions:
     http: ["gitlab.example.com"]
     env_expansion: true
@@ -712,7 +712,7 @@ fn failed_required_env_expansion_blocks_the_plugin_without_running_it() {
 
     let configs: BTreeMap<String, ct_runtime::plugins::PluginConfig> = serde_yaml::from_str(
         r#"
-dev.jag-k.gitlab:
+dev.jagk.gitlab:
   permissions:
     env_expansion: true
   settings:
@@ -749,7 +749,7 @@ fn ungranted_instance_reports_informational_issue_and_falls_back_offline() {
     // before transform falls back to the offline label.
     let configs: BTreeMap<String, ct_runtime::plugins::PluginConfig> = serde_yaml::from_str(
         r#"
-dev.jag-k.gitlab:
+dev.jagk.gitlab:
   settings:
     instances:
       - host: gitlab.example.com
@@ -770,7 +770,7 @@ dev.jag-k.gitlab:
     let document: ct_runtime::config::ConfigDocument = serde_yaml::from_str(
         r#"
 rules:
-  - type: dev.jag-k.gitlab/mr
+  - type: dev.jagk.gitlab/mr
     id: gitlab-mr
 "#,
     )

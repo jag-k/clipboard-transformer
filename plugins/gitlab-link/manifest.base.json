@@ -1,5 +1,5 @@
 {
-  "id": "dev.jag-k.gitlab",
+  "id": "dev.jagk.gitlab",
   "name": "GitLab Links",
   "capabilities": [
     {
@@ -11,5 +11,5 @@
       "reason": "Resolve ${GITLAB_TOKEN}-style references in instance tokens."
     }
   ],
-  "instructions": "Use dev.jag-k.gitlab/project for project roots and static pages; use mr, issue, milestone, pipeline, job, commit, and tag for individual resources; use repository for tree, blob, raw, blame, commits, and compare URLs. MR and issue rules accept comment_display: hidden, marker, id, author, or author-and-id. Set online: false to force offline labels."
+  "instructions": "Use dev.jagk.gitlab/project for project roots and static pages; use mr, issue, milestone, pipeline, job, commit, and tag for individual resources; use repository for tree, blob, raw, blame, commits, and compare URLs. MR and issue rules accept comment_display: hidden, marker, id, author, or author-and-id. Set online: false to force offline labels."
 }
