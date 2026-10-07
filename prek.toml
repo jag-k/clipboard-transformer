@@ -43,11 +43,12 @@ hooks = [{ id = "markdownlint-cli2" }]
 
 # PKGBUILD is excluded: makepkg injects `pkgdir`/`srcdir` and consumes the
 # metadata assignments itself, so shellcheck reports every one of them as
-# unassigned or unused.
+# unassigned or unused. shellcheck-py needs Python 3.9+, and prek otherwise
+# builds the hook with whichever interpreter it finds first on PATH.
 [[repos]]
 repo = "https://github.com/shellcheck-py/shellcheck-py"
 rev = "v0.11.0.1"
-hooks = [{ id = "shellcheck", exclude = "(^|/)PKGBUILD$" }]
+hooks = [{ id = "shellcheck", exclude = "(^|/)PKGBUILD$", language_version = "3.12" }]
 
 # Cargo hooks delegate to `just` so the flags live in exactly one place. The
 # Justfile, this file, and .github/workflows/ci.yml previously each carried
