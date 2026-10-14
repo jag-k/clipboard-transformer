@@ -44,7 +44,7 @@ jobs:
       os: ${{ steps.paths.outputs.os }}
       windows-packaging: ${{ steps.paths.outputs.windows-packaging }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -81,7 +81,7 @@ jobs:
     name: Format
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - name: Install Rust and rustfmt
@@ -107,7 +107,7 @@ jobs:
       matrix:
         os: ${{ fromJSON(needs.changes.outputs.os) }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - name: Install Rust
@@ -141,7 +141,7 @@ jobs:
     name: Dependency advisories and licenses
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - name: Install Rust
@@ -163,7 +163,7 @@ jobs:
     name: MSRV
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - name: Install Rust
@@ -187,7 +187,7 @@ jobs:
     name: Plugin runtime
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - name: Install Rust and the WASI target
@@ -217,7 +217,7 @@ jobs:
     name: Linux X11 runtime
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - name: Install Rust and Xvfb
@@ -240,7 +240,7 @@ jobs:
     name: Linux Wayland data-control runtime
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - name: Install Rust and headless wlroots compositor
@@ -290,7 +290,7 @@ jobs:
     if: needs.changes.outputs.windows-packaging == 'true'
     runs-on: windows-2025
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - name: Install Rust
@@ -317,7 +317,7 @@ jobs:
     if: needs.changes.outputs.windows-packaging == 'true'
     runs-on: windows-2025
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - name: Install Rust
