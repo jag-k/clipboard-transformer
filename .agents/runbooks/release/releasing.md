@@ -196,6 +196,8 @@ are covered in greater depth by
 [macOS signing and notarization](macos-signing.md).
 Windows Authenticode provider choices, signing order, and CI verification are
 covered by [Windows signing](windows-signing.md).
+After a release, [download metrics](download-metrics.md) explains how to read
+`just release-stats` and which channels it cannot see.
 
 When `MACOS_RELEASE_ENABLED=true`, the central preflight checks signing and
 notarization configuration before starting a macOS runner. The macOS release

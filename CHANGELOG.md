@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog], and this project follows
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+### Changed
+
+- **CI:** Cache and verify the v0.1.0 MSI used by the Windows upgrade test to
+  reduce repeated release asset downloads. Add `just release-stats` to report
+  asset downloads per channel, with the baseline MSI reported separately.
+
 ## [0.1.7] - 2026-10-07
 
 ### Changed

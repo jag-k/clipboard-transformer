@@ -5,9 +5,9 @@
 # menu: `check-*` verifies without mutating, `test-*` runs test binaries,
 # `build-*` produces binaries or bundles, `package-*` produces distributable
 # artifacts, `install-*` replaces an installed copy, `gen-*` refreshes
-# committed generated files, `run-*` runs the CLI, and `probe-*` runs the
-# ignored performance probes. `just ci` is the local mirror of the GitHub CI
-# workflow.
+# committed generated files, `run-*` runs the CLI, `probe-*` runs the
+# ignored performance probes, and `release-*` reports on published releases.
+# `just ci` is the local mirror of the GitHub CI workflow.
 #
 # Submodules are intentionally not used: a `just` module inherits neither the
 # parent's variables nor its `set shell`, so every module file would have to
@@ -323,6 +323,14 @@ run-init:
 run-validate config="fixtures/config.yaml":
     cargo run --locked --bin {{ bin }} -- validate --config-file {{ quote(config) }}
 
+# Published releases --------------------------------------------------------------
+
+# Needs the GitHub CLI (`gh`) and uv. Pass `--json` for machine-readable output.
+[doc('Summarize release asset downloads per channel and release')]
+[group('release')]
+release-stats *args:
+    uv run --script tools/release-stats.py {{ args }}
+
 # Performance probes --------------------------------------------------------------
 
 [arg('iterations', help='Number of overlapping plugin runtime replacements')]
@@ -617,10 +625,20 @@ test-windows-msi:
     $ErrorActionPreference = "Stop"
     $msi = Get-ChildItem target/packager/*.msi | Select-Object -First 1
     if (-not $msi) { throw "cargo-packager did not produce an MSI" }
-    $previousMsi = "target/clipboard-transformer-0.1.0-baseline.msi"
-    Invoke-WebRequest `
-      -Uri "https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.0/clipboard-transformer-0.1.0-x86_64.msi" `
-      -OutFile $previousMsi
+    # CI caches target/msi-baseline, so the v0.1.0 release asset is downloaded
+    # once per cache key instead of on every run; the pinned SHA-256 is checked
+    # whether the file came from the cache or the network.
+    $previousMsi = "target/msi-baseline/clipboard-transformer-0.1.0-x86_64.msi"
+    $expected = "a722670600d0dd4851012534afe26831c01c9f37899082de2b17a710a540f36c"
+    if (-not (Test-Path $previousMsi) -or (Get-FileHash $previousMsi -Algorithm SHA256).Hash -ne $expected) {
+      New-Item -ItemType Directory -Force (Split-Path $previousMsi) | Out-Null
+      Invoke-WebRequest `
+        -Uri "https://github.com/jag-k/clipboard-transformer/releases/download/v0.1.0/clipboard-transformer-0.1.0-x86_64.msi" `
+        -OutFile $previousMsi
+    }
+    if ((Get-FileHash $previousMsi -Algorithm SHA256).Hash -ne $expected) {
+      throw "baseline MSI checksum mismatch: $previousMsi"
+    }
     ./package/windows/verify-msi.ps1 `
       -MsiPath $msi.FullName `
       -PreviousMsiPath $previousMsi
