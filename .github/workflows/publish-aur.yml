@@ -22,7 +22,7 @@ jobs:
         run: pacman -Syu --noconfirm --needed git openssh curl
 
       - name: Checkout source
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           path: source
           persist-credentials: false
