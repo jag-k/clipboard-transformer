@@ -238,6 +238,17 @@ fn create_native_item(
             )
         },
     };
+    // macOS 27 hides SF Symbols in menus by default. Keep the icons supplied
+    // by our model visible, while leaving older AppKit versions supported.
+    // objc2-app-kit 0.3 does not yet expose this macOS 27 property.
+    if matches!(model_item, TrayMenuItem::Entry(_))
+        && item.respondsToSelector(sel!(setPreferredImageVisibility:))
+    {
+        // NSMenuItemImageVisibilityVisible = 1 (NSInteger).
+        unsafe {
+            let _: () = msg_send![&*item, setPreferredImageVisibility: 1isize];
+        }
+    }
     NativeMenuItem {
         key,
         item,

@@ -14,6 +14,11 @@ The format is based on [Keep a Changelog], and this project follows
   reduce repeated release asset downloads. Add `just release-stats` to report
   asset downloads per channel, with the baseline MSI reported separately.
 
+### Fixed
+
+- **Tray/macOS:** Keep menu action icons visible on macOS 27, which hides
+  SF Symbols by default, while preserving compatibility with older macOS.
+
 ## [0.1.7] - 2026-10-07
 
 ### Changed
